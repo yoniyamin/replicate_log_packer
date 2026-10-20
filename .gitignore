@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Old log_analyzer snapshot (linked folder, read-only reference)
+reference/
+
+# Logs and packages must never be committed: they may contain customer data
+*.log
+*.log.gz
+*.zip
+package/
+.logpacker/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Claude Code local settings
+.claude/settings.local.json
