@@ -7,6 +7,8 @@
 .badge.warn { background: var(--warn-soft); color: var(--warn); }
 .badge.info { background: var(--info-soft); color: var(--info); }
 .insight { padding: 10px 12px; border-radius: var(--radius-sm); border-left: 3px solid var(--info); background: var(--surface-2); font-size: .92rem; }
+.insights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px; }
+@media (max-width: 720px) { .insights-grid { grid-template-columns: 1fr; } }
 .insight.error { border-left-color: var(--error); }
 .insight.warn { border-left-color: var(--warn); }
 .insight-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
@@ -86,7 +88,10 @@ tr.clickable:hover td { background: var(--surface-2); }
 @media (max-width: 900px) { .kpis-review { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .review-footer { position: sticky; bottom: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 0; margin-top: 16px; background: var(--bg); border-top: 1px solid var(--border); padding-bottom: max(12px, env(safe-area-inset-bottom, 12px)); }
-.savings-badge { display: inline-flex; margin-left: 8px; padding: 2px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent-strong); font-weight: 600; font-size: .78rem; }
+.savings-strip { display: flex; align-items: center; gap: 8px; justify-content: center; flex: 1; font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.savings-icon { font-size: 1.1rem; }
+.savings-arrow { color: var(--accent); font-weight: 700; padding: 0 2px; }
+.savings-badge { display: inline-flex; padding: 3px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; font-size: .78rem; letter-spacing: .01em; }
 
 .tab-unavailable { opacity: .4; cursor: default !important; }
 .tab-unavailable:hover { opacity: .4; }
@@ -112,11 +117,10 @@ tr.clickable:hover td { background: var(--surface-2); }
 .nav-stop.active .nav-dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 .nav-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Nested (depth-1) stops — indented, smaller dot, shifted line */
-.nav-stop.depth-1 { padding-left: 18px; font-size: .78rem; padding-top: 4px; padding-bottom: 4px; }
-.nav-stop.depth-1 .nav-dot { width: 8px; height: 8px; }
-.nav-stop.depth-1 .nav-label { color: var(--muted); }
-.nav-stop.depth-1.active .nav-label { color: var(--accent-strong); }
+/* Fixed top/bottom shortcuts */
+.nav-stop.nav-fixed { opacity: .6; }
+.nav-stop.nav-fixed:hover { opacity: 1; }
+.nav-stop.nav-fixed .nav-label { font-size: .75rem; letter-spacing: .03em; }
 
 /* Fade-in animation on nav rebuild */
 @keyframes navFadeIn {

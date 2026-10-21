@@ -12,10 +12,10 @@ def build_manifest(r: dict) -> dict:
     stats, apply, fl, files = r["stats"], r["apply"], r["full_load"], r["file_ops"]
     tabs = [
         _tab("overview", "Overview", True, ""),
+        _tab("cockpit", "Performance", r["cockpit"]["available"],
+             "No latency samples or batch data. Set the PERFORMANCE logger to TRACE to record latency every 30 seconds."),
         _tab("issues", "Errors & warnings", bool(r["issues"]["groups"]),
              "No errors or warnings in this log.", len(r["issues"]["groups"])),
-        _tab("cockpit", "Performance cockpit", r["cockpit"]["available"],
-             "No latency samples or batch data. Set the PERFORMANCE logger to TRACE to record latency every 30 seconds."),
         _tab("bulk", "Bulk apply", apply["batches"]["count"] > 0 or apply["table_count"] > 0,
              "No batch-apply activity. Set TARGET_APPLY to TRACE to log batches and per-table applies.",
              apply["batches"]["count"]),

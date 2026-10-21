@@ -38,10 +38,11 @@ function draw(root, id, r) {
   const hidden = r.privacy.categories.reduce((a, c) => a + c.replacements, 0);
   const health = r.manifest.health;
 
-  const tabs = r.manifest.tabs.map((t) => ({
-    key: t.id, label: t.label, available: t.available, reason: t.reason || "",
+  // Only show available tabs
+  const tabs = r.manifest.tabs.filter((t) => t.available).map((t) => ({
+    key: t.id, label: t.label,
     count: t.id === "privacy" ? hidden : t.id === "overview" || t.id === "cockpit" ? null : t.count,
-    render: t.available ? () => (t.id === "privacy" ? privacyTab(id, r) : RENDER[t.id](r)) : null,
+    render: () => (t.id === "privacy" ? privacyTab(id, r) : RENDER[t.id](r)),
   }));
 
   const defaultTab = pickDefaultTab(r, tabs);
@@ -52,25 +53,16 @@ function draw(root, id, r) {
 
   const select = (key) => {
     try { sessionStorage.setItem("lp-tab", key); } catch {}
-    mount(bar, tabs.map((t) => {
-      if (!t.available) {
-        return h("button", {
-          class: "tab tab-unavailable", role: "tab", type: "button",
-          "aria-selected": "false", "aria-disabled": "true",
-          title: t.reason || "Not available for this log",
-        }, t.label);
-      }
-      return h("button", {
+    mount(bar, tabs.map((t) =>
+      h("button", {
         class: "tab", role: "tab", type: "button",
         "aria-selected": String(t.key === key),
         "aria-controls": "review-panel",
         onclick: () => select(t.key),
-      }, t.label, t.count != null ? h("span", { class: "count" }, fmt.num(t.count)) : null);
-    }));
+      }, t.label, t.count != null ? h("span", { class: "count" }, fmt.num(t.count)) : null)));
     panel.id = "review-panel";
     mount(panel, tabs.find((t) => t.key === key).render());
 
-    // Rebuild section nav after tab content is in the DOM
     if (scrollSpyCleanup) scrollSpyCleanup();
     scrollSpyCleanup = rebuildSectionNav(sideNav, panel);
   };
@@ -101,21 +93,31 @@ function draw(root, id, r) {
     kpi("Warnings", fmt.num(stats.warnings), stats.warnings ? "warn" : "good", () => select("issues")),
     kpi("Values hidden", fmt.num(hidden), "good", () => select("privacy")));
 
-  // Header chips
-  const title = meta.task || r.input.filename;
+  // H1: task name + log filename
+  const taskName = meta.task;
+  const fileName = r.input.filename;
+  const titleEl = taskName && taskName !== fileName
+    ? h("div", { class: "review-header" },
+        h("h1", {}, taskName),
+        h("div", { class: "muted small", style: "margin-top:-4px;margin-bottom:6px" }, fileName))
+    : h("div", { class: "review-header" }, h("h1", {}, fileName || "Log review"));
+
   const chips = h("div", { class: "chips" },
     chip("Version", meta.version), chip("Source", meta.source_endpoint), chip("Target", meta.target_endpoint),
     chip("Mode", meta.mode), chip("From", fmt.ts(stats.first_ts)), chip("To", fmt.ts(stats.last_ts)));
 
-  // Token savings footer
+  // Token savings footer — centered, fancier
   const rawTokens = Math.max(1, Math.round((r.input.bytes || 0) / CHARS_PER_TOKEN));
   const packTokens = Math.min(rawTokens, STANDARD_PACK_TOKENS);
   const savedPct = rawTokens > 0 ? Math.round((1 - packTokens / rawTokens) * 100) : 0;
   const savingsEl = rawTokens > packTokens
-    ? h("span", { class: "muted small" },
-        `Raw log ≈ ${fmt.tokens(rawTokens)} tokens → packed ≈ ${fmt.tokens(packTokens)} tokens`,
+    ? h("div", { class: "savings-strip" },
+        h("span", { class: "savings-icon" }, "⚡"),
+        h("span", {}, `${fmt.tokens(rawTokens)} tokens`, h("span", { class: "savings-arrow" }, " → "), `${fmt.tokens(packTokens)} tokens`),
         h("span", { class: "savings-badge" }, `${savedPct}% smaller`))
-    : h("span", { class: "muted small" }, `Log ≈ ${fmt.tokens(rawTokens)} tokens`);
+    : h("div", { class: "savings-strip" },
+        h("span", { class: "savings-icon" }, "📦"),
+        h("span", {}, `Log ≈ ${fmt.tokens(rawTokens)} tokens`));
 
   const footer = h("div", { class: "review-footer" },
     savingsEl,
@@ -124,9 +126,8 @@ function draw(root, id, r) {
   const tabSection = h("section", { class: "card", id: "s-findings" }, bar, panel);
 
   const content = h("div", { class: "review-content" },
-    h("div", { class: "review-header" },
-      h("h1", {}, title),
-      chips),
+    titleEl,
+    chips,
     verdictBand,
     kpis,
     qualityNote(r),
@@ -139,21 +140,13 @@ function draw(root, id, r) {
 }
 
 /**
- * Scan the rendered tab panel for navigable landmarks, rebuild the side nav,
- * and wire up IntersectionObserver scroll-spy. Returns a cleanup function.
- *
- * Stops are two-level:
- *   depth 0 — Health, Metrics, Findings (top-level page sections)
- *   depth 1 — sections discovered inside the active tab content (nested under Findings)
+ * Rebuild the side nav: ▲ Top, dynamic tab sections, ▼ Bottom.
+ * Returns a cleanup function to disconnect the scroll-spy observer.
  */
 function rebuildSectionNav(nav, panel) {
-  const stops = [
-    { id: "s-health",  label: "Health",   depth: 0 },
-    { id: "s-metrics", label: "Metrics",  depth: 0 },
-    { id: "s-findings", label: "Findings", depth: 0 },
-  ];
+  const stops = [];
 
-  // Discover sections inside the active tab content (only report-sections and timeline)
+  // Discover sections inside the active tab content
   let idx = 0;
   for (const el of panel.querySelectorAll(".report-section, .timeline-block")) {
     const secId = `s-tab-${idx++}`;
@@ -166,24 +159,25 @@ function rebuildSectionNav(nav, panel) {
     } else if (el.classList.contains("timeline-block")) {
       label = "Timeline";
     }
-    stops.push({ id: secId, label, depth: 1 });
+    stops.push({ id: secId, label });
   }
 
-  // Build DOM — each stop gets a depth class for nesting
+  // Build DOM: ▲ Top + dynamic stops + ▼ Bottom
   mount(nav,
     h("div", { class: "nav-line" }),
+    h("a", { href: "#", class: "nav-stop nav-fixed", onclick: (e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); } },
+      h("span", { class: "nav-dot" }),
+      h("span", { class: "nav-label" }, "▲ Top")),
     stops.map((s) =>
       h("a", {
-        href: `#${s.id}`,
-        class: `nav-stop${s.depth ? ` depth-${s.depth}` : ""}`,
-        dataset: { target: s.id },
-        onclick: (e) => {
-          e.preventDefault();
-          scrollToSection(s.id);
-        },
+        href: `#${s.id}`, class: "nav-stop", dataset: { target: s.id },
+        onclick: (e) => { e.preventDefault(); scrollToSection(s.id); },
       },
         h("span", { class: "nav-dot" }),
-        h("span", { class: "nav-label" }, s.label))));
+        h("span", { class: "nav-label" }, s.label))),
+    h("a", { href: "#", class: "nav-stop nav-fixed", onclick: (e) => { e.preventDefault(); window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); } },
+      h("span", { class: "nav-dot" }),
+      h("span", { class: "nav-label" }, "▼ Bottom")));
 
   // Scroll-spy via IntersectionObserver
   const observer = new IntersectionObserver((entries) => {
@@ -201,10 +195,12 @@ function rebuildSectionNav(nav, panel) {
   return () => observer.disconnect();
 }
 
-/** Scroll to a section by id, accounting for the sticky topbar height. */
+/** Scroll to a section by id, expanding it if collapsed, accounting for the sticky topbar. */
 function scrollToSection(id) {
   const el = document.getElementById(id);
   if (!el) return;
+  // If it's a collapsed <details>, open it first
+  if (el.tagName === "DETAILS" && !el.open) el.open = true;
   const topbar = document.querySelector(".topbar");
   const offset = topbar ? topbar.offsetHeight + 12 : 60;
   const y = el.getBoundingClientRect().top + window.scrollY - offset;

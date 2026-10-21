@@ -18,7 +18,18 @@ export function cockpitTab(r) {
   const c = r.cockpit, lat = r.latency;
   return h("div", { class: "stack" },
     section(`Recommendations (${c.recommendations.length})`,
-      insights(c.recommendations, h("p", { class: "muted small" }, "No rule fired. Nothing stands out in performance.")),
+      c.recommendations.length
+        ? h("div", { class: "insights-grid" }, c.recommendations.map((item) => {
+            const tone = { error: "error", warning: "warn", high: "error", medium: "warn", low: "info" }[item.severity || item.priority] || "info";
+            return h("div", { class: `insight ${tone}` },
+              h("div", { class: "insight-head" },
+                h("span", { class: `badge ${tone}` }, (item.severity || item.priority || "info").toUpperCase()),
+                h("b", {}, item.title), item.area ? h("span", { class: "muted small" }, item.area) : null),
+              h("div", {}, item.message || item.description),
+              item.recommendation ? h("div", { class: "muted small" }, "→ ", item.recommendation) : null,
+              item.actions?.length ? h("ul", { class: "small" }, item.actions.map((a) => h("li", {}, a))) : null);
+          }))
+        : h("p", { class: "muted small" }, "No rule fired. Nothing stands out in performance."),
       { note: `Top contributors: ${c.top_contributors.join(", ")}` }),
     config(c.config),
     lat.samples ? latencySections(lat, c.error_correlation) : h("div", { class: "callout" },
