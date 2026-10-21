@@ -37,7 +37,21 @@ export const fmt = {
   tokens: (n) => (n >= 1000 ? `~${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `~${n}`),
   ts: (s) => (s ? s.replace("T", " ") : "—"),
   pct: (x) => `${Math.round((x || 0) * 100)}%`,
+  /** Short timestamp for timeline axis labels (date + time, no seconds). */
+  tsShort(s) {
+    if (!s) return "";
+    const d = new Date(s.includes("T") ? s : s.replace(" ", "T"));
+    if (isNaN(d)) return s.replace("T", " ");
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  },
 };
+
+/** Parse a log timestamp string to epoch ms. Returns NaN on failure. */
+export function parseLogTs(s) {
+  if (!s) return NaN;
+  return Date.parse(s.includes("T") ? s : s.replace(" ", "T"));
+}
 
 const TOKEN_RE = /\b((?:email|host|path|user|company|cloud|ip|obj|term|db)_\d{2,})\b|\[REDACTED\]/g;
 

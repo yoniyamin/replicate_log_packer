@@ -1,12 +1,12 @@
 // Error and warning patterns, each expandable to show its first excerpt.
-import { fmt, h, withTokens } from "../../dom.js";
+import { fmt, h, parseLogTs, withTokens } from "../../dom.js";
 
 export function issuesTab(r) {
   const groups = r.issues.groups;
   if (!groups.length) {
     return h("div", { class: "empty" }, h("div", { class: "big" }, "✓"), h("p", {}, "No errors or warnings in this log."));
   }
-  const strip = timeline(r.issues.timeline, r.stats.lines);
+  const strip = timeline(r.issues.timeline, r.stats.lines, r.stats.first_ts, r.stats.last_ts);
   return h("div", {},
     h("p", { class: "muted small" },
       `${fmt.num(r.stats.errors)} errors and ${fmt.num(r.stats.warnings)} warnings grouped into ${groups.length} patterns. `,
@@ -17,15 +17,49 @@ export function issuesTab(r) {
   );
 }
 
-/** Dots placed by line position; opening a group highlights its own dots. */
-function timeline(events, totalLines) {
-  const el = h("div", { class: "timeline", role: "img", "aria-label": `Timeline of ${events.length} errors and warnings` });
+/** Time-based or line-based timeline with axis labels, legend, and rich tooltips. */
+function timeline(events, totalLines, firstTs, lastTs) {
+  const start = parseLogTs(firstTs);
+  const end = parseLogTs(lastTs);
+  const hasTime = !isNaN(start) && !isNaN(end) && end > start;
+
+  const strip = h("div", { class: "timeline" });
   for (const e of events) {
-    el.append(h("i", { class: e.severity, dataset: { group: e.group }, title: `L${e.line} · ${e.group}`,
-      style: `left:calc(${((e.line / Math.max(1, totalLines)) * 100).toFixed(2)}% - 2px)` }));
+    let left = null;
+    if (hasTime && e.ts) {
+      const t = parseLogTs(e.ts);
+      if (!isNaN(t)) left = (((t - start) / (end - start)) * 100).toFixed(2);
+    }
+    if (left == null) left = ((e.line / Math.max(1, totalLines)) * 100).toFixed(2);
+
+    const tip = (e.ts ? `${fmt.ts(e.ts)} · ` : "") + `L${e.line} · ${e.group}`;
+    strip.append(h("i", {
+      class: e.severity, dataset: { group: e.group }, title: tip,
+      "aria-label": tip,
+      style: `left:calc(${left}% - 2px)`,
+    }));
   }
+
+  const axis = h("div", { class: "timeline-axis" },
+    h("span", {}, hasTime ? fmt.tsShort(firstTs) : "Start"),
+    h("span", {}, hasTime ? fmt.tsShort(lastTs) : "End"));
+
+  const legend = h("div", { class: "timeline-legend" },
+    h("span", {}, h("i", { class: "swatch E" }), " Error"),
+    h("span", {}, h("i", { class: "swatch W" }), " Warning"));
+
+  const el = h("figure", { class: "timeline-block", "aria-label": `Timeline of ${events.length} errors and warnings` },
+    h("div", { class: "timeline-head" },
+      h("span", { class: "muted small" }, "Timeline"),
+      legend),
+    strip,
+    axis,
+    !hasTime && events.length
+      ? h("figcaption", { class: "muted small" }, "Timestamps missing — markers shown by line order.")
+      : null);
+
   const highlight = (groupId) => {
-    for (const dot of el.children) dot.classList.toggle("dim", groupId != null && dot.dataset.group !== groupId);
+    for (const dot of strip.children) dot.classList.toggle("dim", groupId != null && dot.dataset.group !== groupId);
   };
   return { el, highlight };
 }

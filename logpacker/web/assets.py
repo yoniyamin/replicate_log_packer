@@ -32,7 +32,9 @@ def mount_assets(app: FastAPI, static_dir: Path) -> str:
     version = asset_version(static_dir)
     prefix = f"/assets/{version}/"
     index = (static_dir / "index.html").read_text(encoding="utf-8")
-    index = index.replace('href="css/', f'href="{prefix}css/').replace('src="js/', f'src="{prefix}js/')
+    index = (index.replace('href="css/', f'href="{prefix}css/')
+                   .replace('src="js/', f'src="{prefix}js/')
+                   .replace('src="logos/', f'src="{prefix}logos/'))
 
     @app.get("/", include_in_schema=False)
     def page() -> HTMLResponse:
