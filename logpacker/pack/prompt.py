@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from logpacker.pack.evidence import BUILDERS, Section
+from logpacker.pack import evidence as ev
+from logpacker.pack import evidence_perf as perf
+from logpacker.pack.evidence import Section
+
+# Order in the prompt. Priority inside each Section decides what is dropped first.
+BUILDERS = (ev.overview, perf.recommendations, ev.issues, perf.latency, perf.apply_profile, perf.full_load,
+            ev.signals, ev.settings, ev.runs, ev.excerpts, ev.repetition)
 from logpacker.pack.focus import FOCUS_ASKS, FOCUS_LABELS
 from logpacker.pack.presets import PROMPT_DETAIL, PackOptions, estimate_tokens
 

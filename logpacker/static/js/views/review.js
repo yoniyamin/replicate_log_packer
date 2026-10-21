@@ -2,11 +2,19 @@
 import { api } from "../api.js";
 import { fmt, h, icon, mount } from "../dom.js";
 import { store } from "../store.js";
+import { overviewTab } from "./tabs/overview.js";
 import { issuesTab } from "./tabs/issues.js";
-import { latencyTab } from "./tabs/latency.js";
-import { signalsTab } from "./tabs/signals.js";
+import { cockpitTab } from "./tabs/cockpit.js";
+import { bulkTab } from "./tabs/bulk.js";
+import { fullLoadTab } from "./tabs/fullload.js";
+import { fileOpsTab } from "./tabs/fileops.js";
 import { privacyTab } from "./tabs/privacy.js";
 import { patternsTab } from "./tabs/patterns.js";
+
+const RENDER = {
+  overview: overviewTab, issues: issuesTab, cockpit: cockpitTab, bulk: bulkTab,
+  fullload: fullLoadTab, fileops: fileOpsTab, patterns: patternsTab,
+};
 
 export async function loadReport(id) {
   if (!store.reports.has(id)) store.reports.set(id, await api.report(id));
@@ -20,15 +28,14 @@ export function renderReview(root, id) {
 }
 
 function draw(root, id, r) {
+  if (!r.manifest) return outdated(root);
   const meta = r.metadata, stats = r.stats;
   const hidden = r.privacy.categories.reduce((a, c) => a + c.replacements, 0);
-  const tabs = [
-    { key: "issues", label: "Errors & warnings", count: r.issues.groups.length, render: () => issuesTab(r) },
-    { key: "latency", label: "Latency", count: r.latency.samples ? null : 0, render: () => latencyTab(r) },
-    { key: "signals", label: "Replicate signals", count: r.signals.signals.length, render: () => signalsTab(r) },
-    { key: "patterns", label: "Repeated lines", count: r.repetition.distinct, render: () => patternsTab(r) },
-    { key: "privacy", label: "What was hidden", count: hidden, render: () => privacyTab(id, r) },
-  ];
+  const tabs = r.manifest.tabs.filter((t) => t.available).map((t) => ({
+    key: t.id, label: t.label,
+    count: t.id === "privacy" ? hidden : t.id === "overview" || t.id === "cockpit" ? null : t.count,
+    render: () => (t.id === "privacy" ? privacyTab(id, r) : RENDER[t.id](r)),
+  }));
   const panel = h("div", { role: "tabpanel" });
   const bar = h("div", { class: "tabs", role: "tablist" });
   const select = (key) => {
@@ -48,16 +55,22 @@ function draw(root, id, r) {
           chip("Mode", meta.mode), chip("From", fmt.ts(stats.first_ts)), chip("To", fmt.ts(stats.last_ts)))),
       h("a", { class: "btn primary", href: `#/job/${id}/pack` }, "Continue to pack", icon("arrow", 16))),
     h("div", { class: "kpis" },
+      kpi("Health", `${r.manifest.health.score}/5`, r.manifest.health.score >= 4 ? "good" : r.manifest.health.score === 3 ? "warn" : "error"),
       kpi("Lines", fmt.num(stats.lines)),
       kpi("Errors", fmt.num(stats.errors), stats.errors ? "error" : "good"),
       kpi("Warnings", fmt.num(stats.warnings), stats.warnings ? "warn" : "good"),
-      kpi("Issue patterns", fmt.num(r.issues.groups.length)),
-      kpi("Task runs", fmt.num(r.runs.count)),
+      kpi("Avg latency", r.latency.samples ? `${fmt.num(Math.round(r.latency.target.avg))}s` : "—"),
       kpi("Values hidden", fmt.num(hidden), "good")),
     qualityNote(r),
     h("section", { class: "card" }, bar, panel),
   );
-  select(r.issues.groups.length ? "issues" : r.latency.samples ? "latency" : "signals");
+  select("overview");
+}
+
+function outdated(root) {
+  mount(root, h("div", { class: "card empty" },
+    h("p", {}, "This log was analysed by an older version of LogPacker, before the full reports existed."),
+    h("a", { class: "btn primary", href: "#/" }, "Upload it again")));
 }
 
 function chip(name, value) {

@@ -27,6 +27,13 @@ def test_normalize_keeps_codes_and_merges_variants():
     assert a == b and "ORA-00054" in a
 
 
+def test_generated_file_names_collapse():
+    a = normalize("File CDC00000BB8.csv.gz of size 1200 was uploaded successfully")
+    b = normalize("File CDC0001A2F3.csv.gz of size 98 was uploaded successfully")
+    assert a == b and "CDC<id>.csv" in a
+    assert normalize("table ORDERS_2024 ORA-00054") == "table ORDERS_<n> ORA-00054"
+
+
 def test_error_codes():
     assert extract_error_code("RetCode: SQL_ERROR  SqlState: 57014 NativeError: 604") == "SqlState:57014/604"
     assert extract_error_code("ORA-03113: end-of-file") == "ORA-03113"

@@ -2,6 +2,7 @@
 import { api } from "../api.js";
 import { fmt, h, icon, mount, toast } from "../dom.js";
 import { store } from "../store.js";
+import { fingerprint } from "../fingerprint.js";
 
 const ACCEPT = ".log,.txt,.gz,.zip";
 
@@ -29,9 +30,14 @@ export function renderUpload(root) {
     try {
       const custom = terms.value.split(/\r?\n|,/).map((t) => t.trim()).filter(Boolean);
       const job = await api.create({
-        filename: file.name, size: file.size,
+        filename: file.name, size: file.size, fingerprint: await fingerprint(file),
         sanitize: { enabled: sanitize.checked, mask_objects: objects.checked, custom_terms: custom },
       });
+      if (job.cached && job.state === "ready") {
+        toast("Already analysed — opening the saved review");
+        location.hash = `#/job/${job.id}/review`;
+        return;
+      }
       store.pendingFiles.set(job.id, file);
       location.hash = `#/job/${job.id}`;
     } catch (err) {
@@ -83,6 +89,6 @@ async function loadRecent(card) {
           h("a", { class: "btn small", href: `#/job/${job.id}/review` }, "Open"),
           h("button", { class: "btn small ghost", type: "button", "aria-label": `Delete ${job.filename}`,
             onclick: async () => { await api.remove(job.id); loadRecent(card); } }, icon("trash", 15)))))
-    : [h("p", { class: "muted small" }, "Nothing yet. Logs are kept for 3 days on this computer, then deleted.")];
+    : [h("p", { class: "muted small" }, "Nothing yet. Analysed logs are kept for 7 days after you last open them, then deleted. Uploading the same file again reuses the saved analysis.")];
   mount(card, h("div", { class: "card-title" }, h("h2", {}, "Recent logs")), body);
 }

@@ -26,7 +26,7 @@ def resolve_focus(report: dict, requested: str) -> tuple[str, str]:
     if stats["errors"]:
         groups = report["issues"]["error_groups"]
         return "errors", f"{stats['errors']:,} errors in {groups} patterns"
-    if latency.get("samples") and latency.get("bottleneck") not in (None, "healthy"):
+    if latency.get("samples") and latency["target"]["avg"] >= 5:
         return "performance", f"Average target latency {latency['target']['avg']}s"
     if stats["warnings"]:
         return "errors", f"No errors, but {stats['warnings']:,} warnings"

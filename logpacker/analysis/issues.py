@@ -10,11 +10,13 @@ from collections import Counter, deque
 from dataclasses import dataclass, field
 
 from logpacker.analysis.normalize import extract_error_code, fingerprint, normalize
+from logpacker.analysis.timeutil import seconds
 from logpacker.ingest.lines import LogRecord
 
 CONTEXT_LINES = 4
 MAX_GROUPS = 2000
-MAX_EXCERPT_LINES = 3
+MAX_EXCERPTS = 5
+MAX_TIMELINE = 5000
 _TABLE_RE_CHARS = "'.'"
 
 
@@ -56,6 +58,7 @@ class IssuesCollector:
         self._pending: list[tuple[dict, int]] = []  # (excerpt, lines still to capture)
         self._open: IssueGroup | None = None  # group whose continuation lines we are reading
         self._counts = {"E": 0, "W": 0}
+        self.timeline: list[dict] = []
 
     def feed(self, record: LogRecord) -> None:
         self._capture_after(record)
@@ -89,7 +92,11 @@ class IssuesCollector:
         if _TABLE_RE_CHARS in record.message:
             for obj in _objects(record.message):
                 group.objects[obj] += 1
-        if len(group.excerpts) < MAX_EXCERPT_LINES:
+        if len(self.timeline) < MAX_TIMELINE:
+            self.timeline.append({"line": record.line_no, "ts": record.ts, "t": seconds(record),
+                                  "severity": record.severity, "component": record.component,
+                                  "group": group.id, "text": record.message[:200]})
+        if len(group.excerpts) < MAX_EXCERPTS:
             excerpt = {"line": record.line_no, "before": list(self._before),
                        "text": record.text, "after": []}
             group.excerpts.append(excerpt)
@@ -118,6 +125,7 @@ class IssuesCollector:
             "error_groups": sum(1 for g in ordered if g.severity == "E"),
             "warning_groups": sum(1 for g in ordered if g.severity == "W"),
             "ungrouped_overflow": self.overflow,
+            "timeline": [{k: v for k, v in e.items() if k not in ("t", "text")} for e in self.timeline],
         }
 
 

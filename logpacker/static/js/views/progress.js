@@ -5,6 +5,7 @@ import { store } from "../store.js";
 
 const PHASES = [
   { key: "uploading", label: "Uploading the file" },
+  { key: "queued", label: "Waiting for a free worker" },
   { key: "processing", label: "Removing sensitive data and finding patterns" },
   { key: "ready", label: "Building your review" },
 ];
@@ -38,7 +39,11 @@ export function renderProgress(root, id) {
       store.pendingFiles.delete(id);
       show("uploading", 0, `${file.name} · ${fmt.bytes(file.size)}`);
       try {
-        await api.upload(id, file, (p) => show("uploading", p, `${fmt.pct(p)} of ${fmt.bytes(file.size)}`));
+        const job = await api.upload(id, file, (p) => show("uploading", p, `${fmt.pct(p)} of ${fmt.bytes(file.size)}`));
+        if (job.cached) { // same content was analysed before
+          location.hash = `#/job/${job.id}/review`;
+          return;
+        }
       } catch (err) {
         return fail(err.message);
       }
@@ -55,7 +60,10 @@ export function renderProgress(root, id) {
       if (job.state === "created" || (job.state === "uploading" && !file)) {
         return fail("The upload was interrupted. Please upload the file again.");
       }
-      show(job.state, job.progress, `${fmt.num(job.lines_done)} lines read · ${fmt.pct(job.progress)}`);
+      const text = job.state === "queued"
+        ? "Other logs are being analysed right now; yours starts as soon as a worker frees up."
+        : `${fmt.num(job.lines_done)} lines read · ${fmt.pct(job.progress)}`;
+      show(job.state, job.progress, text);
       await new Promise((r) => setTimeout(r, 600));
     }
   }

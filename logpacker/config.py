@@ -16,6 +16,8 @@ class Settings:
     max_upload_bytes: int
     max_uncompressed_bytes: int
     job_ttl_hours: int
+    workers: int
+    sweep_minutes: int
     host: str
     port: int
 
@@ -38,7 +40,9 @@ def get_settings() -> Settings:
         data_dir=data_dir,
         max_upload_bytes=_int_env("LOGPACKER_MAX_UPLOAD_MB", 4096) * _MB,
         max_uncompressed_bytes=_int_env("LOGPACKER_MAX_UNCOMPRESSED_MB", 16384) * _MB,
-        job_ttl_hours=_int_env("LOGPACKER_JOB_TTL_HOURS", 72),
+        job_ttl_hours=_int_env("LOGPACKER_JOB_TTL_HOURS", 7 * 24),
+        workers=max(1, _int_env("LOGPACKER_WORKERS", min(10, os.cpu_count() or 2))),
+        sweep_minutes=max(1, _int_env("LOGPACKER_SWEEP_MINUTES", 60)),
         host=os.environ.get("LOGPACKER_HOST", "127.0.0.1"),
         port=_int_env("LOGPACKER_PORT", 8765),
     )

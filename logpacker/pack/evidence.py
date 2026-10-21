@@ -41,7 +41,16 @@ def overview(report: dict, _: PromptDetail, focus: str) -> Section:
         ["Lines", f"{stats['lines']:,}"],
         ["Errors / warnings", f"{stats['errors']:,} / {stats['warnings']:,}"],
         ["Task runs in log", runs["count"]],
+        ["Tables seen", f"{meta.get('tables_seen', 0):,}"],
+        ["Full Load completed / CDC started",
+         f"{'yes' if meta.get('full_load_completed') else 'no'} / {'yes' if meta.get('cdc_started') else 'no'}"],
+        ["Loggers at TRACE/VERBOSE", ", ".join(meta.get("verbose_loggers") or []) or "none changed"],
+        ["Log closed normally", "yes" if meta.get("log_closed") else "no (cut off or still running)"],
     ]
+    health = report.get("manifest", {}).get("health")
+    if health:
+        rows.append(["Parser health score", f"{health['score']}/5 {health['label']}"
+                     + (f" ({', '.join(health['reasons'])})" if health["reasons"] else "")])
     text = "## Task overview (computed)\n\n" + _table(["Fact", "Value"], rows)
     return Section("overview", text, 1)
 
@@ -70,20 +79,6 @@ def excerpts(report: dict, detail: PromptDetail, focus: str) -> Section | None:
         body += [f"{n}|{t}" for n, t in ex["after"]]
         parts.append(f"**{g['id']}** ({g['count']:,}×)\n```\n" + "\n".join(body) + "\n```")
     return Section("excerpts", "\n\n".join(parts), 4)
-
-
-def latency(report: dict, _: PromptDetail, focus: str) -> Section | None:
-    lat = report["latency"]
-    if not lat.get("samples"):
-        return None
-    rows = [[name.title(), lat[name]["avg"], lat[name]["p95"], lat[name]["max"], lat[name]["last"]]
-            for name in ("source", "handling", "target")]
-    peak = lat["peak_target"]
-    text = (f"## Latency (computed from {lat['samples']:,} PERFORMANCE samples, seconds)\n\n"
-            + _table(["Latency", "Avg", "P95", "Max", "Last"], rows)
-            + f"\n\nPeak target latency {peak['seconds']}s at line {peak['line']} ({peak['ts']}). "
-              f"Heuristic bottleneck: **{lat['bottleneck']}**.")
-    return Section("latency", text, 2 if focus == "performance" else 3)
 
 
 def signals(report: dict, detail: PromptDetail, focus: str) -> Section | None:
@@ -128,4 +123,3 @@ def runs(report: dict, _: PromptDetail, focus: str) -> Section | None:
     return Section("runs", text, 3)
 
 
-BUILDERS = (overview, issues, signals, latency, settings, runs, excerpts, repetition)

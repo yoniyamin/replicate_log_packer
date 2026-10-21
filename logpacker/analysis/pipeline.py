@@ -12,10 +12,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from logpacker.analysis.apply import ApplyCollector
+from logpacker.analysis.cockpit import build_cockpit
+from logpacker.analysis.fileops import FileOpsCollector
+from logpacker.analysis.fullload import FullLoadCollector
+from logpacker.analysis.health import HealthCollector
 from logpacker.analysis.issues import IssuesCollector
 from logpacker.analysis.latency import LatencyCollector
+from logpacker.analysis.manifest import build_manifest
 from logpacker.analysis.metadata import MetadataCollector
 from logpacker.analysis.normalize import NORMALIZER_VERSION
+from logpacker.analysis.oracle import OracleCollector
 from logpacker.analysis.runs import RunsCollector
 from logpacker.analysis.signals import SignalsCollector
 from logpacker.analysis.stats import StatsCollector
@@ -24,6 +31,7 @@ from logpacker.ingest.lines import LineParser, decode
 from logpacker.ingest.sources import detect_kind, iter_sources
 from logpacker.sanitize import Sanitizer, SanitizeOptions
 
+ANALYSIS_VERSION = "3"  # bump when collectors or the normalizer change what they report
 PROGRESS_EVERY = 20_000
 SOURCE_MARKER = "===== LogPacker: file {name} ====="
 
@@ -44,6 +52,8 @@ class JobFiles:
     def templates(self) -> Path: return self.root / "templates.json"
     @property
     def privacy(self) -> Path: return self.root / "privacy.json"
+    @property
+    def progress(self) -> Path: return self.root / "progress.json"
 
 
 def analyze(files: JobFiles, filename: str, options: SanitizeOptions, max_uncompressed: int,
@@ -51,9 +61,10 @@ def analyze(files: JobFiles, filename: str, options: SanitizeOptions, max_uncomp
     started = time.perf_counter()
     sanitizer = Sanitizer(options)
     parser = LineParser()
-    stats, templates = StatsCollector(), TemplatesCollector()
-    collectors = [stats, MetadataCollector(), RunsCollector(), IssuesCollector(),
-                  LatencyCollector(), SignalsCollector(), templates]
+    stats, templates, latency, issues = StatsCollector(), TemplatesCollector(), LatencyCollector(), IssuesCollector()
+    collectors = [stats, MetadataCollector(), RunsCollector(), issues, latency, SignalsCollector(),
+                  ApplyCollector(), FileOpsCollector(), FullLoadCollector(), HealthCollector(), OracleCollector(),
+                  templates]
     line_no = decode_errors = 0
     is_archive = detect_kind(files.upload) == "zip"
 
@@ -76,8 +87,10 @@ def analyze(files: JobFiles, filename: str, options: SanitizeOptions, max_uncomp
 
     report = {c.name: c.result() for c in collectors if c is not templates}
     report["repetition"] = templates.result()
+    report["cockpit"] = build_cockpit(report, latency.samples, issues.timeline)
+    report["manifest"] = build_manifest(report)
     report["quality"] = {"decode_errors": decode_errors, "unparsed_lines": parser.unparsed,
-                         "normalizer_version": NORMALIZER_VERSION}
+                         "normalizer_version": NORMALIZER_VERSION, "analysis_version": ANALYSIS_VERSION}
     report["input"] = {"filename": sanitizer.apply(filename), "bytes": files.upload.stat().st_size,
                        "sanitized_bytes": files.sanitized.stat().st_size,
                        "seconds": round(time.perf_counter() - started, 2)}

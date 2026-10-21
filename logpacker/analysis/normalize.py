@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import re
 
-NORMALIZER_VERSION = "1"
+NORMALIZER_VERSION = "2"
 MAX_LEN = 220
 
 _RULES: tuple[tuple[re.Pattern, str], ...] = (
@@ -20,6 +20,8 @@ _RULES: tuple[tuple[re.Pattern, str], ...] = (
     (re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.:]\d+)?"), "<ts>"),
     (re.compile(r"\b0x[0-9a-fA-F]+\b"), "<hex>"),
     (re.compile(r"\b(?=[0-9a-fA-F]*\d)[0-9a-fA-F]{12,}\b"), "<hex>"),
+    # Generated names such as CDC00000BB8.csv or attrep_changes819CD14: prefix + 6+ hex chars.
+    (re.compile(r"\b([A-Za-z_]+)\d[0-9A-Fa-f]{5,}\b"), r"\1<id>"),
     (re.compile(r"(?<![A-Za-z\-\d])\d+(?:[.:]\d+)*"), "<n>"),
     (re.compile(r"\s+"), " "),
 )
