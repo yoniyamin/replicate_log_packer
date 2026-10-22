@@ -10,9 +10,10 @@ import hashlib
 import json
 from dataclasses import asdict
 from itertools import islice
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from logpacker.analysis.pipeline import ANALYSIS_VERSION
@@ -23,6 +24,19 @@ from logpacker.web.jobs import Job, JobStore
 
 router = APIRouter(prefix="/api")
 PREVIEW_LINES = 80
+
+_PARAMS_FILE = Path(__file__).resolve().parent.parent / "data" / "endpoint_params.json"
+_endpoint_params: list[dict] | None = None
+
+
+def _load_endpoint_params() -> list[dict]:
+    global _endpoint_params
+    if _endpoint_params is None:
+        if _PARAMS_FILE.exists():
+            _endpoint_params = json.loads(_PARAMS_FILE.read_text(encoding="utf-8"))
+        else:
+            _endpoint_params = []
+    return _endpoint_params
 
 
 class SanitizeIn(BaseModel):
@@ -191,3 +205,28 @@ def download(job_id: str, kind: str, request: Request) -> FileResponse:
     if not path.exists():
         raise HTTPException(404, "Build the package first.")
     return FileResponse(path, filename=name)
+
+
+# --- Endpoint parameters (from dbpropsV2 data) ---
+
+@router.get("/endpoint-params")
+def endpoint_params(q: str | None = None) -> JSONResponse:
+    """Return endpoint parameters, optionally filtered by a search query.
+
+    Without ``q``: return the full list (used by the frontend on first load).
+    With ``q``: search name/ui_name across all endpoints and return matches.
+    """
+    data = _load_endpoint_params()
+    if not q or len(q.strip()) < 2:
+        return JSONResponse(data)
+
+    needle = q.strip().lower()
+    results = []
+    for ep in data:
+        matches = [
+            p for p in ep["params"]
+            if needle in p.get("name", "").lower() or needle in p.get("ui_name", "").lower()
+        ]
+        if matches:
+            results.append({**ep, "params": matches})
+    return JSONResponse(results)

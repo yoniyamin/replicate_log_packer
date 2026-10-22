@@ -81,6 +81,23 @@ textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); font-size: .82rem; color: var(--muted); }
 .chip b { color: var(--text); font-weight: 600; }
+
+/* Meta bar — structured chip layout for review page */
+.meta-bar { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); margin-bottom: 16px; }
+.meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.meta-endpoints { display: flex; align-items: center; gap: 8px; }
+.meta-info { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.meta-arrow { color: var(--muted); font-weight: 700; font-size: .95rem; }
+.chip-btn { cursor: pointer; font: inherit; transition: border-color .15s, background .15s, box-shadow .15s; }
+.chip-btn:hover { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent-soft); }
+.chip-caret { font-size: .7em; color: var(--accent); margin-left: 2px; }
+.meta-timeline { display: flex; align-items: center; gap: 8px; font-size: .88rem; padding-top: 8px; border-top: 1px solid var(--border); }
+.meta-hint { font-size: .75rem; color: var(--muted); opacity: .7; margin-left: 4px; white-space: nowrap; }
+.meta-timeline-icon { display: flex; align-items: center; color: var(--muted); }
+.meta-ts { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 500; }
+.meta-timeline-arrow { color: var(--accent); font-weight: 700; }
+.meta-duration { padding: 2px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-strong); font-weight: 600; font-size: .82rem; }
+@media (max-width: 720px) { .meta-info { margin-left: 0; } .meta-timeline { flex-wrap: wrap; } }
 .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
 .kpi { padding: 14px 16px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); }
 .kpi .value { font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; }

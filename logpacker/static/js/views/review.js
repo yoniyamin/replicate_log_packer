@@ -10,6 +10,7 @@ import { fullLoadTab } from "./tabs/fullload.js";
 import { fileOpsTab } from "./tabs/fileops.js";
 import { privacyTab } from "./tabs/privacy.js";
 import { patternsTab } from "./tabs/patterns.js";
+import { openEndpointParamsModal } from "./tabs/endpoint_params.js";
 import { buildHighlightInsights } from "./highlightInsights.js";
 import { pill } from "../components.js";
 
@@ -39,7 +40,7 @@ function draw(root, id, r) {
   const health = r.manifest.health;
 
   // Only show available tabs
-  const tabs = r.manifest.tabs.filter((t) => t.available).map((t) => ({
+  const tabs = r.manifest.tabs.filter((t) => t.available && t.id !== "endpoint_params").map((t) => ({
     key: t.id, label: t.label,
     count: t.id === "privacy" ? hidden : t.id === "overview" || t.id === "cockpit" ? null : t.count,
     render: () => (t.id === "privacy" ? privacyTab(id, r) : RENDER[t.id](r)),
@@ -102,9 +103,39 @@ function draw(root, id, r) {
         h("div", { class: "muted small", style: "margin-top:-4px;margin-bottom:6px" }, fileName))
     : h("div", { class: "review-header" }, h("h1", {}, fileName || "Log review"));
 
-  const chips = h("div", { class: "chips" },
-    chip("Version", meta.version), chip("Source", meta.source_endpoint), chip("Target", meta.target_endpoint),
-    chip("Mode", meta.mode), chip("From", fmt.ts(stats.first_ts)), chip("To", fmt.ts(stats.last_ts)));
+  // Meta bar: clickable endpoints (open params modal), info chips, timeline with duration
+  const duration = computeDuration(stats.first_ts, stats.last_ts);
+  const hasEndpoints = meta.source_endpoint || meta.target_endpoint;
+  const metaBar = h("div", { class: "meta-bar" },
+    h("div", { class: "meta-row" },
+      h("div", { class: "meta-endpoints" },
+        meta.source_endpoint
+          ? h("button", { class: "chip chip-btn", type: "button",
+              title: "View source endpoint internal parameters",
+              onclick: () => openEndpointParamsModal(r, "source") },
+              "Source ", h("b", {}, meta.source_endpoint), h("span", { class: "chip-caret" }, "▸"))
+          : null,
+        meta.source_endpoint && meta.target_endpoint
+          ? h("span", { class: "meta-arrow" }, "→") : null,
+        meta.target_endpoint
+          ? h("button", { class: "chip chip-btn", type: "button",
+              title: "View target endpoint internal parameters",
+              onclick: () => openEndpointParamsModal(r, "target") },
+              "Target ", h("b", {}, meta.target_endpoint), h("span", { class: "chip-caret" }, "▸"))
+          : null,
+        hasEndpoints
+          ? h("span", { class: "meta-hint" }, "View parameters") : null),
+      h("div", { class: "meta-info" },
+        meta.mode ? h("span", { class: "chip" }, "Mode ", h("b", {}, meta.mode)) : null,
+        meta.version ? h("span", { class: "chip" }, "Version ", h("b", {}, meta.version)) : null)),
+    (stats.first_ts || stats.last_ts)
+      ? h("div", { class: "meta-timeline" },
+          h("span", { class: "meta-timeline-icon" }, icon("calendar", 15)),
+          h("span", { class: "meta-ts" }, fmtReadableTs(stats.first_ts)),
+          h("span", { class: "meta-timeline-arrow" }, "→"),
+          h("span", { class: "meta-ts" }, fmtReadableTs(stats.last_ts)),
+          duration ? h("span", { class: "meta-duration" }, duration) : null)
+      : null);
 
   // Token savings footer — centered, fancier
   const rawTokens = Math.max(1, Math.round((r.input.bytes || 0) / CHARS_PER_TOKEN));
@@ -127,7 +158,7 @@ function draw(root, id, r) {
 
   const content = h("div", { class: "review-content" },
     titleEl,
-    chips,
+    metaBar,
     verdictBand,
     kpis,
     qualityNote(r),
@@ -225,6 +256,33 @@ function outdated(root) {
 
 function chip(name, value) {
   return value ? h("span", { class: "chip" }, name, h("b", {}, value)) : null;
+}
+
+function fmtReadableTs(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts.includes("T") ? ts : ts.replace(" ", "T"));
+  if (isNaN(d)) return ts.replace("T", " ");
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function computeDuration(startTs, endTs) {
+  if (!startTs || !endTs) return null;
+  const s = new Date(startTs.includes("T") ? startTs : startTs.replace(" ", "T"));
+  const e = new Date(endTs.includes("T") ? endTs : endTs.replace(" ", "T"));
+  if (isNaN(s) || isNaN(e)) return null;
+  const ms = e - s;
+  if (ms <= 0) return null;
+  const totalMin = Math.floor(ms / 60000);
+  const totalHrs = Math.floor(totalMin / 60);
+  const mins = totalMin % 60;
+  const days = Math.floor(totalHrs / 24);
+  const hrs = totalHrs % 24;
+  if (days > 0) return `${days}d ${hrs}h ${mins}m`;
+  if (hrs > 0) return `${hrs}h ${mins}m`;
+  if (mins > 0) return `${mins}m`;
+  return "< 1m";
 }
 
 function kpi(name, value, tone = "", onclick = null) {
