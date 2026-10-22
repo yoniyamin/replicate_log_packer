@@ -126,6 +126,7 @@ function draw(root, id, r) {
         hasEndpoints
           ? h("span", { class: "meta-hint" }, "View parameters") : null),
       h("div", { class: "meta-info" },
+        meta.is_logstream ? h("span", { class: "chip chip-logstream" }, "⛓ ", h("b", {}, "Logstream")) : null,
         meta.mode ? h("span", { class: "chip" }, "Mode ", h("b", {}, meta.mode)) : null,
         meta.version ? h("span", { class: "chip" }, "Version ", h("b", {}, meta.version)) : null)),
     (stats.first_ts || stats.last_ts)

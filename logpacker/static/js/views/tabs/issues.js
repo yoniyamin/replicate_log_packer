@@ -23,8 +23,11 @@ function timeline(events, totalLines, firstTs, lastTs) {
   const end = parseLogTs(lastTs);
   const hasTime = !isNaN(start) && !isNaN(end) && end > start;
 
+  // Render warnings first, then errors on top so red is never hidden behind yellow
+  const sorted = [...events].sort((a, b) => (a.severity === "E" ? 1 : 0) - (b.severity === "E" ? 1 : 0));
+
   const strip = h("div", { class: "timeline" });
-  for (const e of events) {
+  for (const e of sorted) {
     let left = null;
     if (hasTime && e.ts) {
       const t = parseLogTs(e.ts);
@@ -33,11 +36,14 @@ function timeline(events, totalLines, firstTs, lastTs) {
     if (left == null) left = ((e.line / Math.max(1, totalLines)) * 100).toFixed(2);
 
     const tip = (e.ts ? `${fmt.ts(e.ts)} · ` : "") + `L${e.line} · ${e.group}`;
-    strip.append(h("i", {
+    const dot = h("i", {
       class: e.severity, dataset: { group: e.group }, title: tip,
       "aria-label": tip,
       style: `left:calc(${left}% - 2px)`,
-    }));
+      onmouseenter: () => highlight(e.group),
+      onmouseleave: () => highlight(null),
+    });
+    strip.append(dot);
   }
 
   const axis = h("div", { class: "timeline-axis" },
@@ -60,13 +66,17 @@ function timeline(events, totalLines, firstTs, lastTs) {
 
   const highlight = (groupId) => {
     for (const dot of strip.children) dot.classList.toggle("dim", groupId != null && dot.dataset.group !== groupId);
+    // Highlight the matching issue card when hovering a timeline dot
+    for (const card of el.parentElement?.querySelectorAll?.(".issue") || []) {
+      card.classList.toggle("issue-highlight", groupId != null && card.dataset.group === groupId);
+    }
   };
   return { el, highlight };
 }
 
 function issueCard(g, highlight) {
   const objects = Object.entries(g.objects || {});
-  return h("details", { class: "issue", ontoggle: (e) => highlight(e.target.open ? g.id : null) },
+  return h("details", { class: "issue", dataset: { group: g.id }, ontoggle: (e) => highlight(e.target.open ? g.id : null) },
     h("summary", {},
       h("span", { class: `badge ${g.severity}` }, g.severity === "E" ? "ERROR" : "WARN"),
       h("span", { class: "count-pill" }, `${fmt.num(g.count)}×`),

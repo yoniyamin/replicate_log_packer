@@ -35,11 +35,14 @@ class IssueGroup:
     lines: list[int] = field(default_factory=list)
     objects: Counter = field(default_factory=Counter)
     excerpts: list[dict] = field(default_factory=list)
+    _first_msg: str | None = field(default=None, repr=False)
+    _all_same: bool = field(default=True, repr=False)
 
     def to_dict(self) -> dict:
+        display = self._first_msg if self._all_same and self._first_msg else self.pattern
         return {
             "id": self.id, "severity": self.severity, "component": self.component,
-            "code": self.code, "pattern": self.pattern, "count": self.count,
+            "code": self.code, "pattern": display, "count": self.count,
             "first_line": self.first_line, "last_line": self.last_line,
             "first_ts": self.first_ts, "last_ts": self.last_ts,
             "sample_lines": self.lines,
@@ -84,9 +87,12 @@ class IssuesCollector:
             group = IssueGroup(f"{prefix}{self._counts[prefix]:03d}", record.severity,
                                record.component, code, pattern,
                                first_line=record.line_no, first_ts=record.ts)
+            group._first_msg = record.message
             self.groups[key] = group
         group.count += 1
         group.last_line, group.last_ts = record.line_no, record.ts
+        if group._all_same and record.message != group._first_msg:
+            group._all_same = False
         if len(group.lines) < 10:
             group.lines.append(record.line_no)
         if _TABLE_RE_CHARS in record.message:

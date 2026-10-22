@@ -159,5 +159,13 @@ def _recommendations(report: dict, lat: dict, corr: dict) -> list[dict]:
         recs.append(_rec("medium", "Errors", "Errors coincide with high latency",
                          f"{corr['errors_in_windows']} errors happened while latency was above its 75th percentile.",
                          ["Start with the errors listed under Error correlation"]))
+    ls_signal = next((s for s in report["signals"]["signals"] if s["id"] == "logstream_missing_files"), None)
+    if ls_signal:
+        recs.append(_rec("high", "Source", "Missing Logstream audit files",
+                         f"{ls_signal['count']} warning(s) about missing audit files. "
+                         "This means the Logstream source is behind and required data is not available for replication.",
+                         ["Check the Logstream source task — it may have stopped or fallen behind",
+                          "Verify storage for the Logstream landing directory",
+                          "Restart the Logstream source task if needed to resend missing files"]))
     order = {"high": 0, "medium": 1, "low": 2}
     return sorted(recs, key=lambda r: order[r["priority"]])

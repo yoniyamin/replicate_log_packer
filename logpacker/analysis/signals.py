@@ -79,6 +79,10 @@ SIGNALS: tuple[Signal, ...] = (
     Signal("assertion", "ASSERTION warnings", "data", _re(r".+"),
            "Replicate detected a data anomaly that may cause replication issues.",
            components=frozenset({"ASSERTION"})),
+    Signal("logstream_missing_files", "Missing Logstream audit files", "source",
+           _re(r"Audit files .+ are missing"),
+           "Logstream audit files are missing. The Logstream source task must catch up or resend the missing files before replication can continue without data gaps.",
+           needle="missing", components=frozenset({"SOURCE_CAPTURE"})),
 )
 
 

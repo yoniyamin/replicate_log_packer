@@ -50,9 +50,11 @@ tr.clickable:hover td { background: var(--surface-2); }
 .timeline-legend .swatch.E { background: var(--error); }
 .timeline-legend .swatch.W { background: var(--warn); }
 .timeline { position: relative; height: 32px; border-radius: 8px; background: var(--surface-2); }
-.timeline i { position: absolute; top: 6px; width: 4px; height: 20px; border-radius: 2px; background: var(--warn); }
-.timeline i.E { background: var(--error); }
-.timeline i.dim { opacity: .25; }
+.timeline i { position: absolute; top: 6px; width: 4px; height: 20px; border-radius: 2px; background: var(--warn); cursor: pointer; transition: opacity .15s, transform .1s; }
+.timeline i.E { background: var(--error); z-index: 1; }
+.timeline i.dim { opacity: .15; }
+.timeline i:hover { transform: scaleX(2.5) scaleY(1.1); opacity: 1 !important; z-index: 2; }
+.issue.issue-highlight { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .timeline-axis { display: flex; justify-content: space-between; padding: 4px 2px 0; font-size: .78rem; color: var(--chart-axis, var(--muted)); font-variant-numeric: tabular-nums; }
 
 /* Health */

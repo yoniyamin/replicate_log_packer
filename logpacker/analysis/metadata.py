@@ -18,6 +18,7 @@ _STOP_REASON_RE = re.compile(r"Stop reason:\s*(.+?)(?:\s+\(|$)")
 _ODBC_RE = re.compile(r"(?:driver|Driver)[:\s]+([^\n;,()]{10,80})")
 _TABLE_NAME_RE = re.compile(r"TABLE_NAME='([^']+)'")
 _FOR_TABLE_RE = re.compile(r"for table '([^']+)'\.?'([^']+)'")
+_FEATURE_EP_RE = re.compile(r"Feature flags for endpoint '([^']+)'")
 MAX_EVENTS = 200
 MAX_TABLES = 100_000
 
@@ -63,6 +64,7 @@ class MetadataCollector:
         self.lines = 0
         self.fatal: dict | None = None
         self.flags = {"full_load_completed": False, "cdc_started": False}
+        self._feature_endpoints: list[str] = []
 
     def feed(self, record: LogRecord) -> None:
         self.lines = record.line_no
@@ -77,6 +79,8 @@ class MetadataCollector:
             self.mode, self.start_mode = m.group(2), m.group(3)
         if "endpoint" in msg:
             self._endpoint(msg)
+        if "Feature flags for endpoint" in msg and (m := _FEATURE_EP_RE.search(msg)):
+            self._feature_endpoints.append(m.group(1))
         if self.license_holder is None and "Licensed to" in msg and (m := _LICENSE_RE.search(msg)):
             self.license_holder, self.license_type = m.group(1).strip(), m.group(2).strip() or None
         if "log level" in msg and (m := _LOGGER_RE.search(msg)):
@@ -128,11 +132,19 @@ class MetadataCollector:
 
     def result(self) -> dict:
         closed = self.closed_at_line is not None and self.lines - self.closed_at_line <= 20
+        # Fill source/target from feature-flag endpoint names when explicit lines are absent
+        if self.source is None and len(self._feature_endpoints) >= 1:
+            self.source = self._feature_endpoints[0]
+        if self.target is None and len(self._feature_endpoints) >= 2:
+            self.target = self._feature_endpoints[1]
+        all_eps = [self.source, self.target] + self._feature_endpoints
+        is_logstream = any("logstream" in (ep or "").lower() for ep in all_eps)
         return {
             "task": self.task, "version": self.version, "os": self.os, "pid": self.pid,
             "mode": self.mode, "start_mode": self.start_mode,
             "source_endpoint": self.source, "target_endpoint": self.target,
             "source_type": self.source_type, "target_type": self.target_type,
+            "is_logstream": is_logstream,
             "license": {"holder": self.license_holder, "type": self.license_type} if self.license_holder else None,
             "settings": self.settings, "loggers": self.loggers[:50],
             "verbose_loggers": sorted({lg["logger"] for lg in self.loggers if lg["to"].upper() in ("TRACE", "VERBOSE")}),

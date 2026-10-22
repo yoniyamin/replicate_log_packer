@@ -207,6 +207,38 @@ def download(job_id: str, kind: str, request: Request) -> FileResponse:
     return FileResponse(path, filename=name)
 
 
+# --- Fetch specific lines from the sanitized log ---
+
+@router.get("/jobs/{job_id}/lines")
+def job_lines(job_id: str, n: str, request: Request) -> JSONResponse:
+    """Return specific lines from the sanitized log by line number.
+
+    ``n`` is a comma-separated list of 1-based line numbers (max 20).
+    Returns a dict mapping each requested line number to its text.
+    """
+    _job(request, job_id, ready=True)
+    try:
+        wanted = {int(x) for x in n.split(",") if x.strip()}
+    except ValueError:
+        raise HTTPException(422, "n must be comma-separated line numbers.")
+    if not wanted or len(wanted) > 20:
+        raise HTTPException(422, "Provide between 1 and 20 line numbers.")
+
+    path = _store(request).files(job_id).sanitized
+    if not path.exists():
+        raise HTTPException(404, "Sanitized log not found.")
+
+    result: dict[str, str] = {}
+    max_wanted = max(wanted)
+    with path.open(encoding="utf-8") as fh:
+        for line_no, text in enumerate(fh, 1):
+            if line_no in wanted:
+                result[str(line_no)] = text.rstrip("\n")
+            if line_no >= max_wanted:
+                break
+    return JSONResponse(result)
+
+
 # --- Endpoint parameters (from dbpropsV2 data) ---
 
 @router.get("/endpoint-params")
