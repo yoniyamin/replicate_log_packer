@@ -2,6 +2,10 @@
 
 Every route is scoped to the caller's session (cookie set in app.py); a job is
 visible only to the sessions that uploaded it.
+
+MCP clients authenticate with ``Authorization: Bearer <api-key>`` instead of
+session cookies.  Jobs created via API key use :data:`LEGACY_OWNER` so that
+both the web UI and MCP can see them.
 """
 
 from __future__ import annotations
@@ -20,7 +24,7 @@ from logpacker.analysis.pipeline import ANALYSIS_VERSION
 from logpacker.pack.presets import PackOptions
 from logpacker.sanitize import SanitizeOptions
 from logpacker.web.cache import content_key, quick_key
-from logpacker.web.jobs import Job, JobStore
+from logpacker.web.jobs import Job, JobStore, LEGACY_OWNER
 
 router = APIRouter(prefix="/api")
 PREVIEW_LINES = 80
@@ -64,7 +68,27 @@ def _store(request: Request) -> JobStore:
     return request.app.state.jobs
 
 
+def _is_api_key_auth(request: Request) -> bool:
+    """Check if the request carries a valid MCP API key."""
+    auth = request.headers.get("authorization", "")
+    if not auth.lower().startswith("bearer "):
+        return False
+    token = auth[7:].strip()
+    if not token:
+        return False
+    try:
+        from logpacker.mcp.config import MCPConfig
+        settings = request.app.state.settings
+        config = MCPConfig.load(settings.data_dir)
+        return config.validate_api_key(token)
+    except Exception:
+        return False
+
+
 def _session(request: Request) -> str:
+    """Return the session id or :data:`LEGACY_OWNER` for API-key callers."""
+    if _is_api_key_auth(request):
+        return LEGACY_OWNER
     return request.state.session
 
 

@@ -4,6 +4,7 @@ import { renderUpload } from "./views/upload.js";
 import { renderProgress } from "./views/progress.js";
 import { renderReview } from "./views/review.js";
 import { renderPack } from "./views/pack.js";
+import { renderMcp } from "./views/mcp.js";
 import { initTheme } from "./theme.js";
 
 const app = document.getElementById("app");
@@ -15,11 +16,16 @@ const STEPS = [
 
 function parse(hash) {
   const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
+  if (parts[0] === "mcp") return { view: "mcp" };
   if (parts[0] === "job" && parts[1]) return { view: parts[2] || "progress", id: parts[1] };
   return { view: "upload" };
 }
 
 function renderStepper(route) {
+  if (route.view === "mcp") {
+    mount(document.getElementById("stepper"), []);
+    return;
+  }
   const current = route.view === "progress" ? 0 : STEPS.findIndex((s) => s.key === route.view);
   const items = [];
   STEPS.forEach((step, i) => {
@@ -40,7 +46,7 @@ function route() {
   cleanup = null;
   const r = parse(location.hash);
   renderStepper(r);
-  const views = { upload: renderUpload, progress: renderProgress, review: renderReview, pack: renderPack };
+  const views = { upload: renderUpload, progress: renderProgress, review: renderReview, pack: renderPack, mcp: renderMcp };
   const render = views[r.view] || renderUpload;
   cleanup = render(app, r.id) || null;
   app.focus({ preventScroll: true });

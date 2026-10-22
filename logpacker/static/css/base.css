@@ -83,6 +83,7 @@ code, pre, .mono { font-family: var(--mono); font-size: .86em; }
 .brand-qlik-dark { display: none; }
 .brand-sep { width: 1px; height: 18px; background: var(--border); }
 .brand-product { font-size: .85rem; font-weight: 600; color: var(--muted); }
+.topbar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 
 :root[data-theme="dark"] .brand-qlik-light { display: none; }
 :root[data-theme="dark"] .brand-qlik-dark { display: inline; }

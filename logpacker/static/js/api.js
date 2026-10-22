@@ -28,6 +28,13 @@ export const api = {
   lines: (id, lineNos) => request("GET", `/api/jobs/${id}/lines?n=${lineNos.join(",")}`),
   downloadUrl: (id, kind) => `/api/jobs/${id}/download/${kind}`,
 
+  // MCP management
+  mcpStatus: () => request("GET", "/api/mcp/status"),
+  mcpKeys: () => request("GET", "/api/mcp/keys"),
+  mcpCreateKey: (owner) => request("POST", "/api/mcp/keys", { owner }),
+  mcpRevokeKey: (prefix) => request("DELETE", "/api/mcp/keys", { key_hash_prefix: prefix }),
+  mcpClientConfig: () => request("GET", "/api/mcp/client-config"),
+
   /** Stream the file as the raw request body; XHR gives upload progress. */
   upload(id, file, onProgress) {
     return new Promise((resolve, reject) => {

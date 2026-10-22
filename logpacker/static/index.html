@@ -21,9 +21,14 @@
       <span class="brand-product">LogPacker</span>
     </a>
     <nav class="stepper" id="stepper" aria-label="Progress"></nav>
-    <button class="icon-btn" id="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="currentColor"/></svg>
-    </button>
+    <div class="topbar-actions">
+      <a class="icon-btn" href="#/mcp" aria-label="MCP settings" title="MCP — AI assistant integration">
+        <img src="logos/mcp-icon.svg" alt="" width="18" height="18" aria-hidden="true" style="display:block">
+      </a>
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="currentColor"/></svg>
+      </button>
+    </div>
   </header>
   <main id="app" class="container" tabindex="-1"></main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

@@ -20,10 +20,16 @@ class Settings:
     sweep_minutes: int
     host: str
     port: int
+    public_url: str = ""
 
     @property
     def jobs_dir(self) -> Path:
         return self.data_dir / "jobs"
+
+    @property
+    def base_url(self) -> str:
+        """URL clients use to reach this server (``LOGPACKER_PUBLIC_URL`` wins over host:port)."""
+        return self.public_url.rstrip("/") or f"http://{self.host}:{self.port}"
 
 
 def _int_env(name: str, default: int) -> int:
@@ -45,4 +51,5 @@ def get_settings() -> Settings:
         sweep_minutes=max(1, _int_env("LOGPACKER_SWEEP_MINUTES", 60)),
         host=os.environ.get("LOGPACKER_HOST", "127.0.0.1"),
         port=_int_env("LOGPACKER_PORT", 8765),
+        public_url=os.environ.get("LOGPACKER_PUBLIC_URL", ""),
     )

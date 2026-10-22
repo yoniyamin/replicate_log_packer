@@ -240,6 +240,12 @@ function scrollToSection(id) {
 }
 
 function pickDefaultTab(r, tabs) {
+  // Deep-link: ?tab=cockpit in the URL selects that tab directly (used by MCP open_report).
+  try {
+    const params = new URLSearchParams(location.hash.split("?")[1] || "");
+    const requested = params.get("tab");
+    if (requested && tabs.some((t) => t.key === requested)) return requested;
+  } catch {}
   try {
     const saved = sessionStorage.getItem("lp-tab");
     if (saved && tabs.some((t) => t.key === saved && t.available)) return saved;

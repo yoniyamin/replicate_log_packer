@@ -17,9 +17,13 @@
 .btn.ghost:hover { color: var(--text); background: var(--surface-2); }
 .btn.small { padding: 5px 10px; font-size: .85rem; border-radius: 8px; }
 .btn[disabled] { opacity: .55; cursor: not-allowed; }
-.icon-btn { margin-left: auto; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
-  border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; }
+.icon-btn { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; text-decoration: none; }
 .icon-btn:hover { color: var(--text); }
+.icon-btn img { opacity: .45; transition: opacity .15s, filter .15s; }
+.icon-btn:hover img { opacity: .85; }
+:root[data-theme="dark"] .icon-btn img { filter: invert(1); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .icon-btn img { filter: invert(1); } }
 
 /* Stepper */
 .stepper { display: flex; align-items: center; gap: 6px; }
@@ -206,3 +210,26 @@ tr:last-child td { border-bottom: 0; }
 .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
 .modal-body .recent-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .modal-body .recent-item:last-child { border-bottom: 0; }
+
+/* MCP settings page */
+.mcp-page { max-width: 880px; margin: 0 auto; }
+.mcp-page .card { margin-bottom: 0; }
+.mcp-page .card h2 { font-size: 1.05rem; margin: 0 0 8px; }
+.mcp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.mcp-page .tbl { margin: 6px 0; }
+.mcp-page .tbl th { font-size: .75rem; }
+.mcp-page .tbl td { font-size: .88rem; padding: 7px 10px; }
+.mcp-page .add-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.mcp-page .add-row input[type="text"] { flex: 1; min-width: 0; padding: 7px 10px; font-size: .88rem; }
+.mcp-page .config-pre { margin: 8px 0 4px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: .78rem; line-height: 1.5; overflow-x: auto; white-space: pre; }
+.mcp-page .badge.good { background: var(--accent-soft); color: var(--accent-strong); }
+.mcp-page .badge.error { background: var(--error-soft); color: var(--error); }
+.mcp-page .badge.warn { background: var(--warn-soft); color: var(--warn); }
+.mcp-page .step-list { counter-reset: step; list-style: none; padding: 0; margin: 6px 0; }
+.mcp-page .step-list li { display: flex; gap: 10px; align-items: flex-start; padding: 5px 0; font-size: .88rem; }
+.mcp-page .step-list li::before { counter-increment: step; content: counter(step); flex: none; width: 22px; height: 22px;
+  border-radius: 7px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; font-size: .8rem; }
+.mcp-page .inline-code { font-family: var(--mono); font-size: .82em; padding: 2px 6px; border-radius: 5px; background: var(--surface-2); }
+.btn.danger { color: var(--error); }
+.btn.danger:hover { background: var(--error-soft); }
+@media (max-width: 720px) { .mcp-grid { grid-template-columns: 1fr; } }

@@ -1,0 +1,45 @@
+{
+  "manifest_version": "0.2",
+  "name": "logpacker",
+  "display_name": "LogPacker",
+  "version": "0.0.0",
+  "description": "Analyse Qlik Replicate task logs with your company's LogPacker server.",
+  "long_description": "Connects Claude Desktop to a LogPacker server on the company network. Log files stay on this computer until you ask Claude to analyse one; the upload_log tool then streams it to the LogPacker server, which sanitises and analyses it.",
+  "author": {
+    "name": "LogPacker"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "LOGPACKER_URL": "${user_config.server_url}",
+        "LOGPACKER_API_KEY": "${user_config.api_key}"
+      }
+    }
+  },
+  "user_config": {
+    "server_url": {
+      "type": "string",
+      "title": "LogPacker server URL",
+      "description": "Root URL of the LogPacker server, e.g. http://logpacker.corp:8765",
+      "required": true,
+      "default": ""
+    },
+    "api_key": {
+      "type": "string",
+      "title": "API key",
+      "description": "The lp_... key from the LogPacker MCP page",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "compatibility": {
+    "platforms": ["win32", "darwin", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}
