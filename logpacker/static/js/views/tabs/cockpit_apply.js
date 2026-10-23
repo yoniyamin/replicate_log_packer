@@ -24,7 +24,7 @@ function batchBehavior(apply) {
       { label: "Changes/s", render: (x) => `${x.bucket} (${x.range})` }, { label: "Batches", key: "batches", num: true },
       { label: "Changes", key: "changes", num: true }, { label: "Avg batch", key: "avg_batch_size", num: true },
       { label: "Share", render: (x) => `${x.share}%`, num: true }], b.rps.buckets) : null,
-    insights(b.issues)));
+    insights(b.issues)), { open: false });
 }
 
 function painTables(apply) {
@@ -35,7 +35,7 @@ function painTables(apply) {
     { label: "Ops", key: "total", num: true }, { label: "1-by-1", key: "one_by_one", num: true },
     { label: "Errors", key: "errors", num: true },
     { label: "PK", render: (t) => (t.has_pk === false ? "✗" : t.has_pk ? "✓" : "?") }], apply.pain_tables),
-  { note: "pain = apply seconds + 10 × errors + 5 × one-by-one" });
+  { note: "pain = apply seconds + 10 × errors + 5 × one-by-one", open: false });
 }
 
 function merge(m) {
@@ -57,7 +57,7 @@ function pipeline(health) {
       stat("Source errors", fmt.num(s.errors), s.errors ? "warn" : "")),
     s.hints.length ? h("ul", { class: "small" }, s.hints.map((x) => h("li", {}, x))) : null,
     p.memory_warnings ? h("p", { class: "muted small" }, "Sorter memory pressure: consider larger stream_buffer_size or more memory for the task.") : null),
-  { open: p.health !== "healthy" || s.health !== "healthy" });
+  { open: false });
 }
 
 function oracle(o) {
@@ -73,5 +73,5 @@ function oracle(o) {
       { label: "Max ms", key: "max_ms", num: true }, { label: "×", key: "multiplier", num: true },
       { label: "Slowest lines", render: (g) => g.lines.join(", "), mono: true }], o.variance_groups.slice(0, 8)) : null,
     o.sessions.count ? h("p", { class: "small" }, `${fmt.num(o.sessions.count)} redo log sessions; longest ${seconds(o.sessions.seconds.max)}, p95 ${seconds(o.sessions.seconds.p95)}.`) : null),
-  { open: o.has_red_flags });
+  { open: false });
 }

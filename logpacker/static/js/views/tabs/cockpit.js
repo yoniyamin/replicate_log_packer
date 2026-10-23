@@ -30,7 +30,7 @@ export function cockpitTab(r) {
               item.actions?.length ? h("ul", { class: "small" }, item.actions.map((a) => h("li", {}, a))) : null);
           }))
         : h("p", { class: "muted small" }, "No rule fired. Nothing stands out in performance."),
-      { note: `Top contributors: ${c.top_contributors.join(", ")}` }),
+      { note: `Top contributors: ${c.top_contributors.join(", ")}`, open: true }),
     config(c.config),
     lat.samples ? latencySections(lat, c.error_correlation) : h("div", { class: "callout" },
       "No PERFORMANCE samples in this log. Set the PERFORMANCE logger to TRACE to record latency every 30 seconds."),
@@ -60,27 +60,27 @@ function latencySections(lat, corr) {
         { label: "From", render: (p) => fmt.ts(p.start_ts) }, { label: "To", render: (p) => fmt.ts(p.end_ts) },
         { label: "Verdict", render: (p) => VERDICT[p.bottleneck] || p.bottleneck },
         { label: "Source avg", key: "source_avg", num: true }, { label: "Handling avg", key: "handling_avg", num: true },
-        { label: "Target avg", key: "target_avg", num: true }], bn.periods) : null)),
+        { label: "Target avg", key: "target_avg", num: true }], bn.periods) : null), { open: false }),
     section("Latency profile", h("div", { class: "stack" },
       stats(...SERIES.map((s) => stat(s.label, `${lat[s.key].avg}s`, "",
         `p50 ${lat[s.key].p50} · p95 ${lat[s.key].p95} · max ${lat[s.key].max}`))),
       h("div", { class: "legend" }, SERIES.map((s) => h("span", {}, h("i", { style: `background:${s.color}` }), s.label))),
       lineChart(lat.series, SERIES),
-      h("p", { class: "muted small" }, `${fmt.num(lat.samples)} samples · peak ${lat.peak_target.seconds}s at L${lat.peak_target.line}`))),
+      h("p", { class: "muted small" }, `${fmt.num(lat.samples)} samples · peak ${lat.peak_target.seconds}s at L${lat.peak_target.line}`)), { open: false }),
     section(`Latency spikes (${lat.spikes.count})`, lat.spikes.count ? table([
       { label: "Line", key: "line", num: true }, { label: "Time", render: (x) => fmt.ts(x.ts) },
       { label: "Target", render: (x) => `${x.value}s`, num: true }, { label: "Baseline", render: (x) => `${x.baseline}s`, num: true },
       { label: "×", key: "multiplier", num: true }, { label: "Driver", key: "driver" }], lat.spikes.top)
-      : h("p", { class: "muted small" }, "✓ No sudden jumps above 2.5× the recent baseline."), { open: lat.spikes.count > 0 }),
+      : h("p", { class: "muted small" }, "✓ No sudden jumps above 2.5× the recent baseline."), { open: false }),
     section(`Sustained high latency (${lat.plateaus.count})`, lat.plateaus.count ? table([
       { label: "From", render: (x) => `L${x.start_line} · ${fmt.ts(x.start_ts)}` }, { label: "To", render: (x) => `L${x.end_line} · ${fmt.ts(x.end_ts)}` },
       { label: "Samples", key: "points", num: true }, { label: "Avg target", render: (x) => `${x.avg}s`, num: true }], lat.plateaus.top)
-      : h("p", { class: "muted small" }, "✓ No plateaus above 1.3× the average."), { open: lat.plateaus.count > 0 }),
+      : h("p", { class: "muted small" }, "✓ No plateaus above 1.3× the average."), { open: false }),
     corr.available ? section(`Errors during high latency (${corr.errors_in_windows})`, h("div", { class: "stack" },
       h("p", { class: "small", style: "margin:0" },
         `${corr.windows} windows where target latency was above its 75th percentile (${corr.threshold_seconds}s); `,
         `${corr.errors_in_windows} of ${corr.errors_total} errors/warnings fell inside them.`),
       corr.samples.length ? table([{ label: "Line", key: "line", num: true }, { label: "Pattern", key: "group" },
-        { label: "Message", key: "text", mono: true }], corr.samples) : null), { open: corr.errors_in_windows > 0 }) : null,
+        { label: "Message", key: "text", mono: true }], corr.samples) : null), { open: false }) : null,
   );
 }

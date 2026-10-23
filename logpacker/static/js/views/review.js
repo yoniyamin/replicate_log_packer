@@ -109,7 +109,7 @@ function draw(root, id, r) {
   const titleEl = taskName && taskName !== fileName
     ? h("div", { class: "review-header" },
         h("h1", {}, taskName),
-        h("div", { class: "muted small", style: "margin-top:-4px;margin-bottom:6px" }, fileName))
+        h("div", { class: "muted small review-filename" }, fileName))
     : h("div", { class: "review-header" }, h("h1", {}, fileName || "Log review"));
 
   // Meta bar: clickable endpoints (open params modal), info chips, timeline with duration

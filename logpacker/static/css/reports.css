@@ -66,7 +66,10 @@ tr.clickable:hover td { background: var(--surface-2); }
 .props dd { margin: 2px 0 0; font-weight: 600; overflow-wrap: anywhere; }
 
 /* Review page layout */
-.review-header { margin-bottom: 16px; }
+.review-header { margin-bottom: 8px; }
+.review-header h1 { margin-bottom: 0.15em; }
+.review-filename { margin: 0; }
+.stack > * + .kpis.compact { margin-top: 18px; }
 
 .verdict-band { display: flex; gap: 16px; align-items: flex-start; padding: 16px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); margin-bottom: 16px; }
 .verdict-score { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; flex: none; line-height: 1; }
