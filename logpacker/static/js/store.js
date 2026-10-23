@@ -3,4 +3,5 @@ export const store = {
   pendingFiles: new Map(),
   reports: new Map(),
   packOptions: new Map(),
+  kb: new Map(),  // job id -> Promise of related KB articles
 };

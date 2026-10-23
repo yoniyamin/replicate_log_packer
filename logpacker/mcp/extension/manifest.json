@@ -2,9 +2,9 @@
   "manifest_version": "0.2",
   "name": "logpacker",
   "display_name": "LogPacker",
-  "version": "0.0.0",
+  "version": "0.1.6",
   "description": "Analyse Qlik Replicate task logs with your company's LogPacker server.",
-  "long_description": "Connects Claude Desktop to a LogPacker server on the company network. Log files stay on this computer until you ask Claude to analyse one; the upload_log tool then streams it to the LogPacker server, which sanitises and analyses it.",
+  "long_description": "Connects Claude Desktop to a LogPacker server on the company network. Log files stay on this computer until you ask Claude to analyse one; the upload_log tool then streams it to the LogPacker server, which sanitises and analyses it. Built-in prompts guide Claude through full reviews, error root-causing, performance tuning, KB article checks, customer replies, log comparisons and logging plans.",
   "author": {
     "name": "LogPacker"
   },
@@ -13,7 +13,9 @@
     "entry_point": "server/index.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/server/index.js"],
+      "args": [
+        "${__dirname}/server/index.js"
+      ],
       "env": {
         "LOGPACKER_URL": "${user_config.server_url}",
         "LOGPACKER_API_KEY": "${user_config.api_key}"
@@ -37,9 +39,79 @@
     }
   },
   "compatibility": {
-    "platforms": ["win32", "darwin", "linux"],
+    "platforms": [
+      "win32",
+      "darwin",
+      "linux"
+    ],
     "runtimes": {
       "node": ">=18.0.0"
     }
-  }
+  },
+  "prompts": [
+    {
+      "name": "review_log",
+      "description": "Full expert review of a Replicate task log: health, root causes, fixes, with quoted evidence.",
+      "arguments": [
+        "file_path",
+        "question"
+      ],
+      "text": "Review the Qlik Replicate task log ${arguments.file_path} as a senior Replicate support engineer.\nThe user's question: ${arguments.question}\n\nSteps:\n1. If ${arguments.file_path} is a file path, call analyze_log with it. If it is the 12-character job_id of an earlier analysis, call check_analysis with it instead. If the analysis is still running, call check_analysis every few seconds until state is ready.\n2. Call pack(job_id), passing the user's question as `question` if there is one. Read analysis_rules and follow them.\n3. Work through every `investigation` step: make the suggested call, read the result, and follow up on anything surprising with search_log or get_lines (context 10-15).\n4. Quote the text of every log line you cite, from key_lines or get_lines. Never cite a line you have not seen.\n5. For each item in kb_articles, decide whether it describes the same error, symptom or endpoint behaviour as this log. Open the URL if you can fetch pages. Keep only the ones that match and drop the rest without comment.\n6. If you can search the web, run the web_checks and verify setting names on help.qlik.com and community.qlik.com for this Replicate version.\n\nAnswer in the format at the end of prompt_text (Summary, Key findings, Root cause & fixes, Performance, What else to collect, Sources). Under Sources, list only the KB articles and pages you actually relied on. End with the web_url so the user can open the interactive report."
+    },
+    {
+      "name": "troubleshoot_errors",
+      "description": "Trace the error chain in a log to its root cause, separating real failures from follow-on errors.",
+      "arguments": [
+        "file_path",
+        "error"
+      ],
+      "text": "Find the root cause of the errors in the Qlik Replicate task log ${arguments.file_path}.\nStart with this error: ${arguments.error}\n\nSteps:\n1. If ${arguments.file_path} is a file path, call analyze_log with it. If it is the 12-character job_id of an earlier analysis, call check_analysis with it instead. If the analysis is still running, call check_analysis every few seconds until state is ready.\n2. Call pack(job_id, focus=\"errors\") and follow its analysis_rules.\n3. Call get_errors and order the patterns by first_line. Replicate logs the real failure first, then wrapper lines as it unwinds (\"Error executing command\", \"Stream component ... terminated\", \"encountered a fatal error\"). Find the earliest specific error; treat the later wrappers as consequences, not causes.\n4. For each distinct root error, call get_error_detail, then get_lines with context 15 around its first occurrence to see what the task was doing just before. Use search_log for the same table, error code or time window.\n5. Call get_kb_articles. Check each article's error text, endpoint and version against the evidence and keep only real matches.\n6. If you can search the web, verify error codes and setting names on help.qlik.com and community.qlik.com.\n\nAnswer with these sections:\n## Summary - the root cause in 2-3 sentences, with the health score.\n## Error chain - a table: Order | Pattern ID | Count | First line | Role (root cause / consequence / unrelated) | Evidence (quoted line).\n## Root cause & fix - for each root error: Evidence, What it means, What to do (the exact setting and where it is set, or the action).\n## Related KB articles - only the ones that match: title, URL and one line on why it applies. Write \"None matched\" if none did.\n## What else to collect - logger levels or files that would confirm the diagnosis."
+    },
+    {
+      "name": "performance_review",
+      "description": "Find where latency comes from (capture, sorter, apply) and produce a prioritised tuning plan.",
+      "arguments": [
+        "file_path",
+        "latency_goal"
+      ],
+      "text": "Review the performance of the Qlik Replicate task in the log ${arguments.file_path}.\nThe latency the user needs: ${arguments.latency_goal}\n\nSteps:\n1. If ${arguments.file_path} is a file path, call analyze_log with it. If it is the 12-character job_id of an earlier analysis, call check_analysis with it instead. If the analysis is still running, call check_analysis every few seconds until state is ready.\n2. Call pack(job_id, focus=\"performance\") and follow its analysis_rules.\n3. Call get_performance: note the bottleneck (source vs apply), the latency percentiles, spikes, plateaus and recommendations.\n4. Call get_batch_details: close reasons and the setting behind each, one-by-one episodes and pain tables. If the log contains Full Load, also call get_fullload.\n5. For the worst latency peak and each switch to one-by-one apply, call get_lines with context 15 to see what happened just before.\n6. If get_performance says latency data is missing, say so and recommend setting the PERFORMANCE logger to TRACE instead of guessing.\n7. From pack's kb_articles, keep only those about the same bottleneck.\n\nAnswer with these sections:\n## Verdict - where the latency comes from (source capture, sorter, target apply, network) in 2-3 sentences, with p50 and p95 target latency.\n## Evidence - bullets, each led by the exact number from the tools.\n## Tuning plan - a table: Priority | Setting or action | Where it is set | Current value (from the log, or \"not in log\") | Suggested value | Expected effect.\n## Risks - what each change could affect.\n## What else to collect\n## Sources"
+    },
+    {
+      "name": "kb_research",
+      "description": "Check which suggested Qlik KB articles really apply to a log, article by article, with evidence.",
+      "arguments": [
+        "file_path"
+      ],
+      "text": "Check which Qlik KB articles really apply to the Qlik Replicate task log ${arguments.file_path}.\n\nSteps:\n1. If ${arguments.file_path} is a file path, call analyze_log with it. If it is the 12-character job_id of an earlier analysis, call check_analysis with it instead. If the analysis is still running, call check_analysis every few seconds until state is ready.\n2. Call get_kb_articles(job_id). These are keyword matches, so expect some to be wrong. If the list is empty, say so, then suggest 2-3 web searches built from the top patterns in get_errors and stop.\n3. Call get_overview for the endpoints, Replicate version and mode.\n4. For each article, read it if you can fetch URLs; otherwise use its title and description. Compare it with the log on: the exact error text or code, the source/target endpoint, the Replicate version, and the situation (Full Load, CDC, Logstream, upgrade).\n5. Back every comparison with evidence from get_error_detail or get_lines, and quote the line.\n\nAnswer with a table: Article (title + URL) | Verdict (Applies / Partly / Does not apply) | Why (the matching or conflicting evidence) | What to do, from the article.\nThen one short paragraph on which article to act on first. Never recommend an article marked Does not apply."
+    },
+    {
+      "name": "customer_reply",
+      "description": "Diagnose a log, then draft a plain-language email to the customer plus internal notes.",
+      "arguments": [
+        "file_path",
+        "question"
+      ],
+      "text": "Draft a reply to a customer about their Qlik Replicate task, based on the log ${arguments.file_path}.\nThe customer asked: ${arguments.question}\n\nSteps:\n1. If ${arguments.file_path} is a file path, call analyze_log with it. If it is the 12-character job_id of an earlier analysis, call check_analysis with it instead. If the analysis is still running, call check_analysis every few seconds until state is ready.\n2. Call pack(job_id) and follow its analysis_rules (investigation, quoting lines) so the diagnosis is sound before you write anything.\n3. From kb_articles, keep only the articles that match the evidence; those can be shared with the customer as links.\n\nWrite the reply as an email:\n- A subject line.\n- A greeting, then a 2-3 sentence plain-language summary of what is happening.\n- What we found - up to 5 bullets, each with the exact count or time from the log.\n- Recommended next steps - numbered, each naming the exact setting and where it is set in the Replicate console.\n- Information we need from you - logs, logger levels or details that are still missing.\n- Helpful articles - matching KB articles only, as links. Leave this out if none matched.\n\nRules: the log was sanitised, so never write placeholder tokens such as host_01 or user_02; say \"the source server\" or \"the task user\" instead. Keep parser IDs (E001, P0012) and line numbers out of the email: put them, with the quoted lines, in a short \"Internal notes\" section after the email for the support engineer."
+    },
+    {
+      "name": "compare_logs",
+      "description": "Compare two task logs (before/after a change, or healthy vs failing) and explain the difference.",
+      "arguments": [
+        "file_path",
+        "second_file_path",
+        "question"
+      ],
+      "text": "Compare two Qlik Replicate task logs: A = ${arguments.file_path} and B = ${arguments.second_file_path}.\nContext from the user: ${arguments.question}\n\nSteps:\n1. For A and for B: if it is a file path call analyze_log; if it is a 12-character job_id call check_analysis. Wait until both are ready.\n2. For each log call get_overview, get_errors and get_performance, and get_batch_details if it has apply data.\n3. Match error patterns between the logs by their text, not by ID: IDs such as E001 are numbered separately in each log.\n4. Before explaining a difference, quote the lines behind it with get_lines from each log.\n\nAnswer with these sections:\n## Summary - the most important difference in 2-3 sentences.\n## Side by side - a table with columns Metric | A | B | Change, and rows: Health score, Replicate version, Source -> target, Mode, Time range, Errors, Warnings, Target latency p50 / p95, Main batch close reason, One-by-one switches.\n## Errors - new in B, gone in B, and in both, with the count in each log.\n## What explains the difference - backed by quoted lines from each log.\n## Recommendation"
+    },
+    {
+      "name": "logging_plan",
+      "description": "Decide which Replicate loggers to raise (and for how long) to diagnose a problem the log cannot yet explain.",
+      "arguments": [
+        "file_path",
+        "question"
+      ],
+      "text": "Plan which logging to turn on to diagnose a problem with the Qlik Replicate task in ${arguments.file_path}.\nThe problem to diagnose: ${arguments.question}\n\nSteps:\n1. If ${arguments.file_path} is a file path, call analyze_log with it. If it is the 12-character job_id of an earlier analysis, call check_analysis with it instead. If the analysis is still running, call check_analysis every few seconds until state is ready.\n2. Call get_overview: note verbose_loggers, settings, the Replicate version and the endpoints.\n3. Call get_errors and get_signals to see what the current log already shows.\n4. Call get_performance to see whether latency samples exist (they need the PERFORMANCE logger at TRACE).\n5. If you can search the web, confirm the logger component names for this Replicate version on help.qlik.com.\n\nAnswer with these sections:\n## What this log can and cannot show - 3-5 bullets.\n## Logging to enable - a table: Logger component | Level (TRACE or VERBOSE) | Why | What to look for afterwards.\n## How long, and what to send back - how long to run, log size and rollover settings, and a reminder to set the loggers back to INFO afterwards, because VERBOSE fills the disk quickly.\nKeep the list minimal: only loggers that help answer the problem."
+    }
+  ],
+  "prompts_generated": false
 }

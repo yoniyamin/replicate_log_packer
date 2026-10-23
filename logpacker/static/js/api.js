@@ -25,6 +25,7 @@ export const api = {
   privacy: (id) => request("GET", `/api/jobs/${id}/privacy`),
   pack: (id, options) => request("POST", `/api/jobs/${id}/pack`, options),
   remove: (id) => request("DELETE", `/api/jobs/${id}`),
+  kb: (id) => request("GET", `/api/jobs/${id}/kb`),
   lines: (id, lineNos) => request("GET", `/api/jobs/${id}/lines?n=${lineNos.join(",")}`),
   downloadUrl: (id, kind) => `/api/jobs/${id}/download/${kind}`,
 

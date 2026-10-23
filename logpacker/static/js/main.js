@@ -15,7 +15,8 @@ const STEPS = [
 ];
 
 function parse(hash) {
-  const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
+  // "?tab=..." deep links (MCP open_report) are read by the view itself, not part of the route.
+  const parts = hash.split("?")[0].replace(/^#\/?/, "").split("/").filter(Boolean);
   if (parts[0] === "mcp") return { view: "mcp" };
   if (parts[0] === "job" && parts[1]) return { view: parts[2] || "progress", id: parts[1] };
   return { view: "upload" };

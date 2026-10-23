@@ -10,6 +10,7 @@ import { fullLoadTab } from "./tabs/fullload.js";
 import { fileOpsTab } from "./tabs/fileops.js";
 import { privacyTab } from "./tabs/privacy.js";
 import { patternsTab } from "./tabs/patterns.js";
+import { kbTab, loadKb } from "./tabs/kb.js";
 import { openEndpointParamsModal } from "./tabs/endpoint_params.js";
 import { buildHighlightInsights } from "./highlightInsights.js";
 import { pill } from "../components.js";
@@ -45,22 +46,30 @@ function draw(root, id, r) {
     count: t.id === "privacy" ? hidden : t.id === "overview" || t.id === "cockpit" ? null : t.count,
     render: () => (t.id === "privacy" ? privacyTab(id, r) : RENDER[t.id](r)),
   }));
+  // Not part of the report: looked up on demand, so the count arrives later.
+  const kb = { key: "kb", label: "KB articles", available: true, count: null, render: () => kbTab(id) };
+  const privacyAt = tabs.findIndex((t) => t.key === "privacy");
+  tabs.splice(privacyAt < 0 ? tabs.length : privacyAt, 0, kb);
 
   const defaultTab = pickDefaultTab(r, tabs);
   const panel = h("div", { role: "tabpanel" });
   const bar = h("div", { class: "tabs", role: "tablist" });
   const sideNav = h("nav", { class: "section-nav", "aria-label": "Page sections" });
   let scrollSpyCleanup = null;
+  let current = defaultTab;
+
+  const drawBar = () => mount(bar, tabs.map((t) =>
+    h("button", {
+      class: "tab", role: "tab", type: "button",
+      "aria-selected": String(t.key === current),
+      "aria-controls": "review-panel",
+      onclick: () => select(t.key),
+    }, t.label, t.count != null ? h("span", { class: "count" }, fmt.num(t.count)) : null)));
 
   const select = (key) => {
     try { sessionStorage.setItem("lp-tab", key); } catch {}
-    mount(bar, tabs.map((t) =>
-      h("button", {
-        class: "tab", role: "tab", type: "button",
-        "aria-selected": String(t.key === key),
-        "aria-controls": "review-panel",
-        onclick: () => select(t.key),
-      }, t.label, t.count != null ? h("span", { class: "count" }, fmt.num(t.count)) : null)));
+    current = key;
+    drawBar();
     panel.id = "review-panel";
     mount(panel, tabs.find((t) => t.key === key).render());
 
@@ -169,6 +178,7 @@ function draw(root, id, r) {
 
   mount(root, h("div", { class: "review-layout" }, content, sideNav));
   select(defaultTab);
+  loadKb(id).then((data) => { kb.count = data.articles.length; drawBar(); }).catch(() => {});
 }
 
 /**

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import asdict
 from itertools import islice
 from pathlib import Path
@@ -21,6 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from logpacker.analysis.pipeline import ANALYSIS_VERSION
+from logpacker.kb.related import related_for_job
 from logpacker.pack.presets import PackOptions
 from logpacker.sanitize import SanitizeOptions
 from logpacker.web.cache import content_key, quick_key
@@ -28,6 +30,7 @@ from logpacker.web.jobs import Job, JobStore, LEGACY_OWNER
 
 router = APIRouter(prefix="/api")
 PREVIEW_LINES = 80
+log = logging.getLogger("logpacker.web")
 
 _PARAMS_FILE = Path(__file__).resolve().parent.parent / "data" / "endpoint_params.json"
 _endpoint_params: list[dict] | None = None
@@ -153,6 +156,8 @@ async def upload_content(job_id: str, request: Request) -> dict:
 
     key = content_key(digest.hexdigest(), job.sanitize)
     if hit := store.cached(key):  # same bytes analysed before, maybe under another name
+        log.info("Upload %s (%s, %s bytes) matches cached analysis %s", job.id, job.filename,
+                 f"{written:,}", hit.id)
         for k in job.keys:
             store.add_key(hit, k)
         store.delete(job.id)
@@ -188,6 +193,13 @@ def job_privacy(job_id: str, request: Request) -> FileResponse:
     """Includes original values; served only to sessions that uploaded the file."""
     _job(request, job_id, ready=True)
     return FileResponse(_store(request).files(job_id).privacy, media_type="application/json")
+
+
+@router.get("/jobs/{job_id}/kb")
+def job_kb(job_id: str, request: Request) -> dict:
+    """Qlik KB articles that may relate to the findings (keyword match; candidates, not answers)."""
+    _job(request, job_id, ready=True)
+    return related_for_job(_store(request).files(job_id))
 
 
 @router.post("/jobs/{job_id}/pack")

@@ -46,6 +46,43 @@ All reports are built in the same single pass over the log (no line cap, no re-r
 
 Thresholds follow the earlier log_analyzer reports. The rule-based findings also go into the prompt.
 
+## Related KB articles
+
+The **KB articles** tab (`GET /api/jobs/{id}/kb`, MCP `get_kb_articles`, and `kb_articles` in the
+MCP `pack` result) lists Qlik support articles that may relate to the findings. Each error/warning
+pattern, error code (ORA-, SQLSTATE, …), fatal error and notable signal becomes a keyword query
+over `logpacker/data/kb_articles.json` (921 articles, BM25 with title boost and a phrase check).
+Replicate's generic cascade lines ("Error executing command", "Stream component … terminated")
+are skipped. Results are candidates, not answers: the UI and the MCP note both say to use an
+article only if it matches the evidence. The lookup runs on demand and is cached in the job folder.
+
+To refresh the corpus after re-indexing the KB in log_analyzer (reads Chroma's SQLite directly,
+no chromadb needed):
+
+```
+python -m logpacker.kb.build --chroma ../log_analyzer/chroma_kb
+```
+
+## Claude Desktop extension and prompts
+
+The MCP page offers `logpacker.mcpb`, a small Node bridge (`logpacker/mcp/extension/`) that adds the
+local `analyze_log` / `upload_log` tools and curated prompt templates, shown in Claude Desktop's **+** menu:
+
+| Prompt | Does |
+|---|---|
+| `review_log` | Full review: analyze → pack → investigation → quoted lines → KB check → answer in the pack format |
+| `troubleshoot_errors` | Orders the error chain, separates the root error from cascade lines, fix per root cause |
+| `performance_review` | Bottleneck verdict and a tuning-plan table (setting, where, current → suggested value) |
+| `kb_research` | Verdict per suggested KB article (Applies / Partly / Does not apply) with evidence |
+| `customer_reply` | Plain-language customer email without placeholders or IDs, plus internal notes |
+| `compare_logs` | Side-by-side of two logs (before/after, healthy/failing), errors matched by text |
+| `logging_plan` | Which loggers to raise, to which level and for how long |
+
+Each takes a log path or the job_id of an earlier analysis. The prompts are declared in the extension's
+`manifest.json` (the MCPB `prompts` field) and the bridge serves that same list at runtime, so edit them
+there only. Bump the manifest `version` whenever the manifest or `server/index.js` changes, or Claude
+Desktop keeps the build it already has.
+
 ## Caching, retention and sessions
 
 - Uploading the same file again (same privacy options) reuses the saved analysis. The browser
@@ -84,6 +121,7 @@ logpacker/
                cockpit.py and manifest.py derive recommendations, health and tab availability
                pipeline.py runs them all in a single pass
   pack/        condense.py · evidence.py / evidence_perf.py (prompt sections) · prompt.py · focus.py · bundle.py
+  kb/          index.py (BM25 over data/kb_articles.json) · related.py (findings -> queries) · build.py (export)
   web/         app.py · routes.py · jobs.py (registry, retention) · worker.py (process pool) · cache.py · assets.py
   static/      index.html, css/, js/ (ES modules, no build step; served under a versioned /assets/ path)
 tools/make_sample_log.py   synthetic log for demos and tests
