@@ -22,8 +22,6 @@ import zipfile
 from pathlib import Path
 from urllib.parse import urlparse
 
-from logpacker import __version__
-
 EXTENSION_DIR = Path(__file__).parent / "extension"
 KEY_PLACEHOLDER = "<your-api-key>"
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
@@ -71,9 +69,13 @@ def all_configs(base_url: str, key: str = KEY_PLACEHOLDER) -> dict:
 
 
 def build_mcpb(base_url: str) -> bytes:
-    """Zip the Claude Desktop extension, pre-filling *base_url* as the server URL."""
+    """Zip the Claude Desktop extension, pre-filling *base_url* as the server URL.
+
+    The extension carries its own ``version`` in ``extension/manifest.json`` —
+    bump it whenever ``server/index.js`` or the manifest changes, or Claude
+    Desktop treats the new file as the build it already has installed.
+    """
     manifest = json.loads((EXTENSION_DIR / "manifest.json").read_text(encoding="utf-8"))
-    manifest["version"] = __version__
     manifest["user_config"]["server_url"]["default"] = base_url.rstrip("/")
 
     buf = io.BytesIO()

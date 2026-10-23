@@ -42,9 +42,13 @@ def _correlation(samples: list[tuple], timeline: list[dict]) -> dict:
     hits = []
     for begin, end in windows:
         hits.extend(errors[bisect_left(times, begin):bisect_right(times, end)])
+    # The timeline holds warnings too; count real errors separately so the
+    # recommendation never reports "errors" for a log that has none.
+    error_hits = sum(1 for e in hits if e["severity"] == "E")
     return {
         "available": True, "threshold_seconds": round(threshold, 2), "windows": len(windows),
         "errors_in_windows": len(hits), "errors_total": len(errors),
+        "error_hits": error_hits, "warning_hits": len(hits) - error_hits,
         "by_component": dict(Counter(e["component"] for e in hits).most_common(8)),
         "by_type": dict(Counter(_error_type(e["text"]) for e in hits).most_common()),
         "samples": [{"line": e["line"], "ts": e["ts"], "group": e["group"], "text": e["text"]} for e in hits[:10]],
@@ -155,10 +159,16 @@ def _recommendations(report: dict, lat: dict, corr: dict) -> list[dict]:
         recs.append(_rec("high", "Source", "Oracle redo read times vary widely",
                          "Reads of the same size take very different times (trace logging).",
                          ["Check I/O on the redo/archive storage and ASM", "Look for contention at the slow times"]))
-    if corr.get("errors_in_windows"):
+    n_err, n_warn = corr.get("error_hits", 0), corr.get("warning_hits", 0)
+    if n_err:
+        also = f" (plus {n_warn} warning(s))" if n_warn else ""
         recs.append(_rec("medium", "Errors", "Errors coincide with high latency",
-                         f"{corr['errors_in_windows']} errors happened while latency was above its 75th percentile.",
+                         f"{n_err} error(s){also} happened while latency was above its 75th percentile.",
                          ["Start with the errors listed under Error correlation"]))
+    elif n_warn:
+        recs.append(_rec("low", "Errors", "Warnings coincide with high latency",
+                         f"{n_warn} warning(s) happened while latency was above its 75th percentile; no errors did.",
+                         ["Check the warnings listed under Error correlation"]))
     ls_signal = next((s for s in report["signals"]["signals"] if s["id"] == "logstream_missing_files"), None)
     if ls_signal:
         recs.append(_rec("high", "Source", "Missing Logstream audit files",

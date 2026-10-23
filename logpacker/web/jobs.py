@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import shutil
 import threading
@@ -24,6 +25,8 @@ from logpacker.web import worker
 
 FAILED_TTL_SECONDS = 3600
 LEGACY_OWNER = "*"
+
+log = logging.getLogger("logpacker.jobs")
 
 
 @dataclass
@@ -70,6 +73,8 @@ class JobStore:
         with self._lock:
             self._jobs[job.id] = job
         self._save(job)
+        log.info("Job %s created for %s (%s bytes, %s)", job.id, filename, f"{size:,}",
+                 "MCP/API key" if owner == LEGACY_OWNER else "web session")
         return job
 
     def get(self, job_id: str, owner: str | None = None) -> Job | None:
@@ -145,6 +150,14 @@ class JobStore:
                 for key in job.keys:
                     self._by_key[key] = job.id
         self._save(job)
+        mb = f"{job.size / (1024 * 1024):,.1f} MB"
+        if state == "failed":
+            log.warning("Job %s failed (%s, %s): %s", job.id, job.filename, mb, error)
+        elif state == "ready":
+            log.info("Job %s ready (%s, %s, %s lines) in %.1fs", job.id, job.filename, mb,
+                     f"{job.lines_done:,}", job.finished_at - job.created_at)
+        elif state in ("uploading", "queued"):
+            log.info("Job %s %s (%s, %s)", job.id, state, job.filename, mb)
 
     def start_analysis(self, job: Job) -> None:
         self.mark(job, "queued")

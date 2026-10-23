@@ -110,11 +110,14 @@ class _ApiKeyGuard:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
 
-    mcp_ctx = _prepare_mcp(settings)
+    # One store for the web routes and both MCP transports: a job created by
+    # MCP create_analysis must be the one PUT /api/jobs/{id}/content uploads into.
+    jobs = JobStore(settings)
+    mcp_ctx = _prepare_mcp(settings, jobs)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.jobs = JobStore(settings)
+        app.state.jobs = jobs
         if mcp_ctx:
             async with mcp_ctx["session_manager"].run():
                 yield
@@ -141,7 +144,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
-def _prepare_mcp(settings: Settings) -> dict | None:
+def _prepare_mcp(settings: Settings, jobs: JobStore) -> dict | None:
     """Create the MCP session manager and ASGI handlers (before the app is built).
 
     Returns None if the ``mcp`` package is not installed.
@@ -162,16 +165,25 @@ def _prepare_mcp(settings: Settings) -> dict | None:
     mcp_config = MCPConfig.load(settings.data_dir)
     base_url = settings.base_url
 
+    # Stateless mode opens and terminates a throwaway transport per request and
+    # logs "Terminating session: None" at INFO for each; LogPacker logs the
+    # requests that matter itself (logpacker.mcp).
+    logging.getLogger("mcp.server.streamable_http").setLevel(logging.WARNING)
+
     # Streamable HTTP transport — build the session manager ourselves
     # so we can enter its run() context in the app lifespan.
-    mcp_http = create_mcp_server(settings=settings, mcp_config=mcp_config, base_url=base_url)
+    # Stateless: the tools keep no per-session state, and stateful sessions
+    # broke clients that re-send initialize (Claude Desktop's extension pool)
+    # or outlive a server restart — every request then 404'd "Session not found".
+    mcp_http = create_mcp_server(job_store=jobs, settings=settings, mcp_config=mcp_config, base_url=base_url)
     session_manager = StreamableHTTPSessionManager(
         app=mcp_http._lowlevel_server,
+        stateless=True,
     )
     http_handler = StreamableHTTPASGIApp(session_manager)
 
     # Legacy SSE transport — its lifespan is simpler and works when mounted
-    mcp_sse = create_mcp_server(settings=settings, mcp_config=mcp_config, base_url=base_url)
+    mcp_sse = create_mcp_server(job_store=jobs, settings=settings, mcp_config=mcp_config, base_url=base_url)
     sse_app = mcp_sse.sse_app(sse_path="/sse", message_path="/messages/")
 
     return {

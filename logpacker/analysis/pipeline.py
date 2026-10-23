@@ -31,7 +31,7 @@ from logpacker.ingest.lines import LineParser, decode
 from logpacker.ingest.sources import detect_kind, iter_sources
 from logpacker.sanitize import Sanitizer, SanitizeOptions
 
-ANALYSIS_VERSION = "4"  # bump when collectors or the normalizer change what they report
+ANALYSIS_VERSION = "6"  # bump when collectors or the normalizer change what they report
 PROGRESS_EVERY = 20_000
 SOURCE_MARKER = "===== LogPacker: file {name} ====="
 

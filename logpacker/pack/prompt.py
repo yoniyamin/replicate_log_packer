@@ -28,11 +28,18 @@ Use these sections as `##` headings, in this order:
 *What it means*, *What to do* (concrete settings or actions).
 4. **Performance** – only if latency or apply data is present; otherwise one sentence saying it is missing.
 5. **What else to collect** – logs, logging levels or settings that would confirm the diagnosis.
+6. **Sources** – the documentation or community pages you checked, with URLs. Omit if you checked none.
 
 Rules:
 - Counts, averages and line numbers above were computed by a parser over the full log. Use them as given; do not recount.
+- The findings above are a starting point, not the answer. Investigate each open point before concluding \
+(what triggered a fallback, whether a table has a primary key, what the task was doing at a latency peak): \
+read the log lines around it and state what you checked and what is still unknown.
 - Cite line numbers only from the attachment or the excerpts above. If something is not in the evidence, say so.
 - Tokens like `host_01`, `user_02`, `ip_03` are consistent placeholders for redacted values. Do not guess the originals.
+- If you can search the web, verify Replicate behaviour, setting names and error/warning texts on help.qlik.com \
+and community.qlik.com for this Replicate version, and list the pages under **Sources**. Only if you cannot, \
+say which points are unverified.
 - Do not invent parameter names, KB articles or URLs. If you mention a Replicate setting, say where it is set.
 """
 

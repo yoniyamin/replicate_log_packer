@@ -65,9 +65,18 @@ def apply_profile(report: dict, detail: PromptDetail, focus: str) -> Section | N
     if pain:
         text += "\n\n" + _table(["Table", "Ins", "Upd", "Del", "Merge", "Apply s", "1-by-1", "Errors", "PK"],
                                 [[t["table"], t["insert"], t["update"], t["delete"], t["merge"], t["apply_time"],
-                                  t["one_by_one"], t["errors"], {True: "yes", False: "no", None: "?"}[t["has_pk"]]]
+                                  t["one_by_one"], t["errors"], _pk_cell(t)]
                                  for t in pain])
+        renamed = [f"`{t['table']}` → `{t['target']}`" for t in pain if t.get("target")]
+        if renamed:
+            text += "\n\nTarget table names (renamed on the target): " + ", ".join(renamed)
     return Section("apply", text, 2 if focus == "performance" else 3)
+
+
+def _pk_cell(table: dict) -> str:
+    if table["has_pk"] is True:
+        return f"yes ({table['pk_columns']})" if table.get("pk_columns") else "yes"
+    return {False: "no", None: "?"}[table["has_pk"]]
 
 
 def full_load(report: dict, detail: PromptDetail, focus: str) -> Section | None:

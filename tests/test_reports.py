@@ -4,8 +4,10 @@ import shutil
 
 import pytest
 
+from logpacker.analysis.apply import ApplyCollector
 from logpacker.analysis.latency_patterns import plateaus, spikes
 from logpacker.analysis.pipeline import JobFiles, analyze
+from logpacker.ingest.lines import LineParser
 from logpacker.sanitize import SanitizeOptions
 
 
@@ -62,6 +64,22 @@ def test_overview_cockpit_and_manifest(report):
     recs = {r["title"] for r in report["cockpit"]["recommendations"]}
     assert any("one-by-one" in t for t in recs)
     assert 1 <= report["manifest"]["health"]["score"] <= 4
+
+
+def test_primary_key_logged_under_renamed_target_table():
+    lines = [
+        "00304021: 2026-09-28T17:56:41 [TARGET_APPLY    ]T:  Primary key ID used for table 'ODS.T_COPY'  (oracle_endpoint_table.c:768)",
+        "00304021: 2026-09-28T17:58:37 [TARGET_APPLY    ]T:  Going to start applying bulk changes  (bulk_apply.c:1)",
+        "00304021: 2026-09-28T17:58:37 [TARGET_APPLY    ]T:  Start applying of 'UPDATE (3)' events for table 'COLVIR'.'T_SRC' (1).  (bulk_apply.c:2929)",
+        "00304021: 2026-09-28T17:58:37 [TARGET_APPLY    ]T:  Going to run update statement, from seq 1 to seq 5, statement "
+        "'UPDATE  /*+ PARALLEL(tempview) */  ( SELECT /*+ PARALLEL(\"user_02\".\"attrep_changes1\") PARALLEL(\"ODS\".\"T_COPY\") */ ...'  (x.c:1)",
+        "00304021: 2026-09-28T17:58:40 [TARGET_APPLY    ]T:  Finished applying of 5 'UPDATE (3)' events for table 'COLVIR'.'T_SRC' (1).  (bulk_apply.c:1)",
+    ]
+    parser, collector = LineParser(), ApplyCollector()
+    for n, text in enumerate(lines, 1):
+        collector.feed(parser.parse(text, n, "a"))
+    table = next(t for t in collector.result()["tables"] if t["table"] == "COLVIR.T_SRC")
+    assert (table["has_pk"], table["pk_columns"], table["target"]) == (True, "ID", "ODS.T_COPY")
 
 
 def _samples(values):

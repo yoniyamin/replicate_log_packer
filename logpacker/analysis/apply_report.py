@@ -64,7 +64,7 @@ def _table_row(t) -> dict:
         "applies": t.applies, "apply_time": apply_time,
         "avg_apply_time": round(t.apply_time / t.applies, 3) if t.applies else None,
         "max_apply_time": round(t.max_apply_time, 3), "one_by_one": t.one_by_one, "errors": t.errors,
-        "has_pk": t.has_pk, "first_line": t.first_line,
+        "has_pk": t.has_pk, "pk_columns": t.pk_columns, "target": t.target, "first_line": t.first_line,
         "pain": round(apply_time + 10 * t.errors + 5 * t.one_by_one, 2),
     }
 

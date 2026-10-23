@@ -33,6 +33,11 @@ _NO_PK_RE = re.compile(r"no PK for table|without.*primary key", re.I)
 _NO_BULK_RE = re.compile(r"Apply no Bulk", re.I)
 _MERGE_RE = re.compile(r"Going to execute MERGE|Merge table statement MERGE", re.I)
 _TABLE_RE = re.compile(r"'([^']+)'\.+'([^']+)'")
+# Logged against the TARGET table name, which may differ from the source name
+# (renamed by a transformation), e.g. "Primary key ID used for table 'ODS.T_COPY'".
+_PK_USED_RE = re.compile(r"(?:Primary key|Unique index)\s+(.+?)\s+used for table\s+'([^']+)'", re.I)
+# First "SCHEMA"."TABLE" in a statement that is not Replicate's own changes table.
+_QUOTED_TABLE_RE = re.compile(r'"([^"]+)"\."((?!attrep_)[^"]+)"', re.I)
 _PK_RES = (
     ("PKi", re.compile(r"same bulk.*INSERT.*same PK|INSERT.*changes PK.*same bulk", re.I)),
     ("PKu", re.compile(r"same bulk.*Update.*updated.*same PK|Update.*changes PK.*same bulk", re.I)),
@@ -74,6 +79,8 @@ class TableStats:
     one_by_one: int = 0
     errors: int = 0
     has_pk: bool | None = None
+    pk_columns: str | None = None
+    target: str | None = None
     first_line: int = 0
 
 
@@ -93,6 +100,9 @@ class ApplyCollector:
         self._pending_reason: str | None = None
         self._open_applies: dict[tuple[str, str], tuple[float | None, int]] = {}
         self._episode: dict | None = None
+        self._pk_by_target: dict[str, str] = {}   # target table -> key columns
+        self._target_of: dict[str, str] = {}      # source table -> target table
+        self._applying: str | None = None         # source table whose statements are running
 
     def feed(self, record: LogRecord) -> None:
         if record.continuation:
@@ -107,10 +117,14 @@ class ApplyCollector:
 
         if "bulk" in msg or "Bulk" in msg or "same PK" in msg or "changes PK" in msg:
             self._bulk_line(record, msg)
+        if "used for table" in msg and (m := _PK_USED_RE.search(msg)):
+            self._pk_by_target[m.group(2)] = m.group(1)
         if "Going to run" in msg and (m := _STATEMENT_RE.search(msg)):
             batch = self._batch or self._open(record)
             batch.changes += int(m.group(3)) - int(m.group(2)) + 1
             batch.statements += 1
+            if self._applying and self._applying not in self._target_of and (t := _QUOTED_TABLE_RE.search(msg)):
+                self._target_of[self._applying] = f"{t.group(1)}.{t.group(2)}"
         elif "applying" in msg:
             self._table_line(record, msg)
         if "one-by-one" in msg:
@@ -171,6 +185,7 @@ class ApplyCollector:
         if m := _TABLE_START_RE.search(msg):
             op, name = _op(m.group(1)), f"{m.group(2)}.{m.group(3)}"
             self._table(name, record)
+            self._applying = name
             self._open_applies[(name, op)] = (seconds(record), record.line_no)
             if self._batch is not None:
                 self._batch.tables.add(name)
@@ -223,7 +238,17 @@ class ApplyCollector:
             ep.pop("_t", None)
             self.episodes.append(ep)
             self._episode = None
+        self._resolve_keys()
         return build_apply_report(self)
+
+    def _resolve_keys(self) -> None:
+        """Attach key info logged under a target name to the source table that applies into it."""
+        for name, stats in self.tables.items():
+            target = self._target_of.get(name, name)
+            stats.target = target if target != name else None
+            cols = self._pk_by_target.get(target)
+            if cols and stats.has_pk is None:
+                stats.has_pk, stats.pk_columns = True, cols
 
 
 def _is_batch_start(msg: str) -> bool:
