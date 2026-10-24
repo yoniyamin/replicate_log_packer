@@ -1,12 +1,17 @@
 """Full Load lifecycle per table and segment (init -> loading -> complete | error | reloading).
 
 Segments are keyed by (table id, attempt, segment number); a reload starts a new
-attempt and resets the table's row counters. Report shaping is in fullload_report.py.
+attempt and resets the table's row counters. Each reload records the error that
+caused it and how long the failing segment ran; the SORTER's later "Reload for
+table Id N is requested" is matched to it as the moment the reload was executed
+(Replicate first lets the segments still running finish). Report shaping is in
+fullload_report.py.
 """
 
 from __future__ import annotations
 
 import re
+from collections import deque
 
 from logpacker.analysis.fullload_report import build_full_load_report
 from logpacker.analysis.timeutil import seconds, span
@@ -14,7 +19,8 @@ from logpacker.ingest.lines import LogRecord
 
 _COMPONENTS = frozenset({"TASK_MANAGER", "SOURCE_UNLOAD", "TARGET_LOAD", "TABLES_MANAGER", "SORTER"})
 _HINTS = ("initializ", "Start loading", "Unload finished", "Load finished", "Reloading table",
-          "Transformation Where", "UNLOAD_TABLE_SEGMENT", "ull load", "ull Load", "target preparation")
+          "Transformation Where", "UNLOAD_TABLE_SEGMENT", "ull load", "ull Load", "target preparation",
+          "Reload for table")
 _T = r"'([^']+)'\.'([^']+)'\s*\(Id\s*=\s*(\d+)\)"
 
 
@@ -33,6 +39,8 @@ LOAD_TABLE = _re(rf"Load finished for table {_T}\.\s*(\d+)\s+rows received\.\s*(
 TM_SEG = _re(rf"Load finished for segment #(\d+)\s+of table {_T}\s*by subtask\s*\d+\.\s*(\d+)\s+records transferred")
 TM_TABLE = _re(rf"Load finished for table {_T}\s*by subtask\s*\d+\.\s*(\d+)\s+records transferred")
 RELOAD = _re(r"Reloading table\s+(\d+)\s+because subtask\s*#(\d+)\s+that was loading segment\s+(\d+)\s+finished with error")
+RELOAD_REQUEST = _re(r"Reload for table Id\s+(\d+)\s+is requested")
+_SOURCE_REF = re.compile(r"\s*\([\w.]+\.\w+:\d+\)\s*$")
 WHERE = _re(r"Transformation Where\s+'([^']*)'")
 UNLOAD_CMD = _re(r"Command 'UNLOAD_TABLE_SEGMENT'\s+received in component 'st_(\d+)_")
 COMPLETED = _re(r"Full\s+load\s+completed")
@@ -51,11 +59,14 @@ class FullLoadCollector:
         self.first_ts: str | None = None
         self.last_ts: str | None = None
         self._subtask_by_thread: dict[str, str] = {}
+        self._recent_errors: deque[tuple[int, str]] = deque(maxlen=20)  # (line, message) for reload causes
 
     def feed(self, r: LogRecord) -> None:
         if r.continuation or r.component not in _COMPONENTS:
             return
         msg = r.message
+        if r.severity == "E":
+            self._recent_errors.append((r.line_no, _SOURCE_REF.sub("", msg)))
         if not any(h in msg for h in _HINTS):
             return
         self.first_ts = self.first_ts or r.ts
@@ -165,7 +176,10 @@ class FullLoadCollector:
         if t is None:
             return True
         seg = t["segments"].get((t["attempt"], int(seg_no)))
-        text = re.sub(r"\s*\([\w.]+\.\w+:\d+\)\s*$", "", msg)
+        text = _SOURCE_REF.sub("", msg)
+        # The cause is the first error logged after the failing segment started (later ones are the unwind).
+        since = seg["start_line"] if seg is not None else 0
+        cause = next(((n, m) for n, m in self._recent_errors if n > since), None)
         if seg is not None:
             seg["status"], seg["error"] = "error", text[:300]
         t["reload_count"] += 1
@@ -176,11 +190,24 @@ class FullLoadCollector:
         t["load_start"] = t["load_end"] = None
         t["_load"] = t["_end"] = None
         self.reloads.append({"table": t["table"], "table_id": tid, "subtask": subtask, "segment": int(seg_no),
-                             "line": r.line_no, "ts": r.ts, "message": text[:300]})
+                             "line": r.line_no, "ts": r.ts, "message": text[:300],
+                             "attempt": t["attempt"] - 1,
+                             "segment_seconds": span(seg["_t"], now) if seg is not None else None,
+                             "cause_line": cause[0] if cause else None, "cause": cause[1][:300] if cause else None,
+                             "executed_line": None, "executed_ts": None, "wait_seconds": None, "_t": now})
+        self._recent_errors.clear()
         return True
 
+    def _reload_request(self, r, now, tid: str) -> None:
+        """The SORTER carrying out the latest reload of this table, once its running segments finished."""
+        pending = next((x for x in reversed(self.reloads) if x["table_id"] == tid), None)
+        if pending is not None and pending["executed_line"] is None:
+            pending.update(executed_line=r.line_no, executed_ts=r.ts, wait_seconds=span(pending["_t"], now))
+
     def _misc(self, r, msg, now) -> bool:
-        if m := UNLOAD_CMD.search(msg):
+        if m := RELOAD_REQUEST.search(msg):
+            self._reload_request(r, now, m.group(1))
+        elif m := UNLOAD_CMD.search(msg):
             self._subtask_by_thread[r.thread] = m.group(1)
         elif r.component == "SOURCE_UNLOAD" and (m := WHERE.search(msg)):
             subtask = self._subtask_by_thread.get(r.thread)

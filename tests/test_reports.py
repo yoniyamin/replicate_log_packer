@@ -82,6 +82,50 @@ def test_primary_key_logged_under_renamed_target_table():
     assert (table["has_pk"], table["pk_columns"], table["target"]) == (True, "ID", "ODS.T_COPY")
 
 
+def _reload_cycle(start: int) -> list[tuple[int, str]]:
+    """One cycle of a Full Load reload loop: segment 5 times out ~250 s in, segment 4 finishes ~1.4 h later."""
+    tm, su, tl, so = "[TASK_MANAGER    ]I:", "[SOURCE_UNLOAD   ]", "[TARGET_LOAD     ]I:", "[SORTER          ]I:"
+    t = "'dbo'.'big' (Id = 1)"
+    return [
+        (start, f"{tm}  Start initializing segmented table {t} by subtask 1. Start load timestamp 0  (r.c:1)"),
+        (start, f"{tm}  Start loading segment #4 of 5 of table {t} by subtask 4. Start load timestamp 0  (r.c:1)"),
+        (start, f"{tm}  Start loading segment #5 of 5 of table {t} by subtask 5. Start load timestamp 0  (r.c:1)"),
+        (start + 250, f"{su}E:  RetCode: SQL_ERROR  SqlState: HYT00 NativeError: 30149 Message: The command has timed out. [1022502]  (a.c:1)"),
+        (start + 250, f"{su}E:  Error executing source loop [1022506]  (s.c:1)"),
+        (start + 250, f"{tm}  Reloading table 1 because subtask #5 that was loading segment 5 finished with error, and some data "
+                      "from the segment was already loaded to the target  (r.c:2863)"),
+        (start + 5000, f"{su}I:  Unload finished for segment #4 of segmented table {t}. 1000 rows sent.  (s.c:1)"),
+        (start + 5000, f"{tl}  Load finished for segment #4 of segmented table {t}. 1000 rows received. 0 rows skipped. "
+                       "Volume transferred 5000000.  (e.c:1)"),
+        (start + 5000, f"{so}  Reload for table Id 1 is requested  (sorter_transaction.c:2519)"),
+    ]
+
+
+def test_full_load_reload_loop():
+    from datetime import datetime, timedelta
+
+    from logpacker.analysis.fullload import FullLoadCollector
+
+    base = datetime(2026, 7, 23, 12, 0, 0)
+    lines = [(s, text) for k in range(3) for s, text in _reload_cycle(k * 5000)]
+    parser, collector = LineParser(), FullLoadCollector()
+    for n, (s, text) in enumerate(lines, 1):
+        ts = (base + timedelta(seconds=s)).isoformat()
+        collector.feed(parser.parse(f"00011256: {ts} {text}", n, "a"))
+    fl = collector.result()
+    table = fl["tables"][0]
+    loop = table["reload_loop"]
+    assert (loop["reloads"], loop["failing_segment"], loop["failing_segment_reloads"]) == (3, 5, 3)
+    assert loop["seconds_to_failure"] == {"min": 250, "median": 250, "max": 250} and loop["constant_failure_time"]
+    assert "HYT00" in loop["cause"] and loop["cause_line"] == 4  # the first error, not the unwind after it
+    assert loop["largest_redone_segment"] == {"segment": 4, "times": 3, "rows": 1000, "volume": 5000000}
+    assert loop["executed_by_sorter"] == 3 and loop["wait_seconds"] == {"min": 4750, "max": 4750}
+    first = fl["reloads"][0]
+    assert (first["executed_line"], first["wait_seconds"]) == (9, 4750) and "_t" not in first
+    insight = next(i for i in fl["insights"] if i["title"] == "Reload loop on dbo.big")
+    assert "near-constant" in insight["message"] and "not a separate trigger" in insight["message"]
+
+
 def _samples(values):
     return [(f"2026-01-01T00:{i // 60:02d}:{i % 60:02d}", i + 1, 0.1 * v, v, 0.9 * v, float(i)) for i, v in enumerate(values)]
 

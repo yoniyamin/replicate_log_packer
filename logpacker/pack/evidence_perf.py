@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from logpacker.analysis.fullload_report import loop_sentences
 from logpacker.pack.evidence import Section, _table
 from logpacker.pack.presets import PromptDetail
 
@@ -87,9 +88,30 @@ def full_load(report: dict, detail: PromptDetail, focus: str) -> Section | None:
     text = (f"## Full Load (computed)\n\n- Completed: **{'yes' if s['completed'] else 'no'}**; tables {s['tables_total']} "
             f"(loaded {s['tables_loaded']}, loading {s['tables_loading']}, failed {s['tables_failed']}, "
             f"reloaded {s['tables_reloaded']}); rows received {s['rows_received']:,}; reload events {s['reload_events']}")
-    slow = [t for t in fl["tables"] if t["duration_seconds"]][:min(8, detail.issue_rows)]
-    if slow:
-        text += "\n\n" + _table(["Table", "Status", "Segments", "Rows", "Duration s", "Reloads"],
+    # Already ordered: reloading tables first (they never finish, so have no duration), then the longest.
+    shown = fl["tables"][:min(8, detail.issue_rows)]
+    if shown:
+        text += "\n\n" + _table(["Table", "Status", "Segments (current attempt)", "Rows (current attempt)",
+                                 "Duration s", "Reloads"],
                                 [[t["table"], t["status"], f"{t['segments_complete']}/{t['segment_count']}",
-                                  f"{t['rows_received']:,}", round(t["duration_seconds"]), t["reload_count"]] for t in slow])
-    return Section("full_load", text, 3)
+                                  f"{t['rows_received']:,}", round(t["duration_seconds"]) if t["duration_seconds"] else "—",
+                                  t["reload_count"]] for t in shown])
+    loops = [t for t in fl["tables"] if t.get("reload_loop")][:3]
+    for t in loops:
+        text += f"\n\n**Reload loop on {t['table']}** (computed from every reload):\n"
+        text += "\n".join(f"- {s}" for s in loop_sentences(t["table"], t["reload_loop"]))
+        text += "\n\n" + _reload_rows(t, fl["reloads"], detail)
+    return Section("full_load", text, 2 if loops else 3)
+
+
+def _reload_rows(t: dict, reloads: list[dict], detail: PromptDetail) -> str:
+    rows = [r for r in reloads if r["table_id"] == t["id"]][:min(12, detail.issue_rows)]
+    return _table(["Reload decided", "Segment", "Segment ran", "Cause line", "Executed by SORTER", "Waited"],
+                  [[f"L{r['line']}", f"#{r['segment']}", _secs(r["segment_seconds"]),
+                    f"L{r['cause_line']}" if r["cause_line"] else "—",
+                    f"L{r['executed_line']}" if r["executed_line"] else "not yet", _secs(r["wait_seconds"])]
+                   for r in rows])
+
+
+def _secs(s: float | None) -> str:
+    return "—" if s is None else f"{s:,.0f}s"

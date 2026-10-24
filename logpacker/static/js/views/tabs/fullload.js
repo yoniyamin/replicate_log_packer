@@ -19,7 +19,10 @@ export function fullLoadTab(r) {
       { note: "longest first" }),
     fl.reloads.length ? section(`Reloads (${fl.reloads.length})`, table([
       { label: "Line", key: "line", num: true }, { label: "Table", key: "table" }, { label: "Segment", key: "segment", num: true },
-      { label: "Subtask", key: "subtask" }, { label: "Message", key: "message", mono: true }], fl.reloads)) : null,
+      { label: "Segment ran", render: (x) => seconds(x.segment_seconds), num: true },
+      { label: "Cause", render: (x) => x.cause ? h("span", { title: x.cause }, `L${x.cause_line} · ${x.cause.slice(0, 80)}`) : "—", mono: true },
+      { label: "Executed", render: (x) => x.executed_line ? `L${x.executed_line} (+${seconds(x.wait_seconds)})` : "not yet", mono: true }],
+      fl.reloads), { note: "“Executed” is the SORTER’s “Reload for table … is requested”, after the running segments finished" }) : null,
   );
 }
 
@@ -33,7 +36,8 @@ function tableCard(t) {
     h("div", { class: "body stack" },
       stats(stat("Rows sent", fmt.num(t.rows_sent)), stat("Rows received", fmt.num(t.rows_received)),
         stat("Volume", fmt.bytes(t.volume)), stat("Unload", seconds(t.unload_seconds)), stat("Max gap", seconds(t.max_gap_seconds)),
-        stat("Attempts", fmt.num(t.attempts), t.attempts > 1 ? "error" : "")),
+        stat("Attempts", fmt.num(t.attempts), t.attempts > 1 ? "error" : ""),
+        t.reload_loop ? stat("Re-loaded", fmt.bytes(t.reload_loop.redone_volume), "error", "thrown away by reloads") : null),
       segments(t.segments),
       t.prior_attempt_segments.length ? h("div", {}, h("h4", {}, "Earlier attempts"), segments(t.prior_attempt_segments)) : null));
 }

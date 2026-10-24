@@ -25,8 +25,12 @@ KNOWN_TLDS = frozenset(
 
 # Values that look like hosts/users in key=value pairs but are not identifying.
 NOT_SENSITIVE = frozenset(
-    "localhost null none true false yes no default n/a na sa system".split()
+    "localhost null none true false yes no default n/a na sa system "
+    "dedicated shared pooled tcp tcps ipc".split()  # Oracle descriptor keywords: (SERVER = DEDICATED)
 )
+
+# Built-in databases: masking them hides useful context and identifies nobody.
+SYSTEM_DATABASES = frozenset("master model msdb tempdb sybsystemprocs sybsystemdb postgres template0 template1".split())
 
 
 @dataclass(frozen=True)
@@ -63,8 +67,15 @@ def _is_host_name(value: str) -> bool:
     return _is_meaningful(value) and not re.fullmatch(r"[\d.]+|[0-9a-fA-F:]+", value)
 
 
+def _is_database(value: str) -> bool:
+    return _is_meaningful(value) and value.strip("'\"").lower() not in SYSTEM_DATABASES
+
+
 _OCTET = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
-_KV_END = r"[^;,\s'\")\]}]+"
+_KV_END = r"[^;,\s'\"()\]}]+"  # a value never starts with "(": "(ADDRESS = (PROTOCOL = TCP)" is structure
+# Dotted versions ("Sybase DB version '16.0.3.11'") look like IPv4 addresses.
+_NOT_AFTER_VERSION = "".join(rf"(?<!{p})" for p in ("version ", "version '", 'version "', "version: ",
+                                                       "version: '", "version=", "version is "))
 
 RULES: tuple[Rule, ...] = (
     Rule("secret", re.compile(
@@ -75,7 +86,14 @@ RULES: tuple[Rule, ...] = (
     Rule("path", re.compile(r"\\\\[^\s\\'\"]+\\[^\s'\"]*"), needle="\\\\"),
     Rule("host", re.compile(
         r"(?i)\b(?:server|host|hostname|data source|system|address|endpoint|dsn)\s*=\s*(?P<v>" + _KV_END + ")"),
-        needle="=", learn=True, accept=_is_meaningful),
+        needle="=", learn=True, accept=_is_host_name),
+    # SQL Server: "Going to connect to server 'HOST\INSTANCE' database 'DB'" (the instance suffix stays).
+    Rule("host", re.compile(r"(?i)\bserver\s+'(?P<v>[^'\\\s]+)(?:\\[^'\s]*)?'"), needle="'", learn=True,
+         accept=_is_host_name),
+    Rule("db", re.compile(r"(?i)\bdatabase\s+'(?P<v>[^'\s]+)'"), needle="'", learn=True, accept=_is_database),
+    Rule("db", re.compile(
+        r"(?i)\b(?:db|database|dbname|database name|initial catalog|service_name|sid)\s*=\s*(?P<v>" + _KV_END + ")"),
+        needle="=", learn=True, accept=_is_database),
     Rule("user", re.compile(
         r"(?i)\b(?:uid|user id|user|username|user name|login)\s*[=:]\s*'?(?P<v>" + _KV_END + ")"),
         learn=True, accept=_is_meaningful),
@@ -94,7 +112,7 @@ RULES: tuple[Rule, ...] = (
          needle="\\", learn=True),
     Rule("user", re.compile(r"/(?:home|Users)/(?P<v>[^/\s'\"]+)"), needle="/", learn=True),
     Rule("cloud", re.compile(r"\barn:aws[\w-]*:[\w-]+:[\w-]*:\d*:[^\s'\"]+"), needle="arn:"),
-    Rule("ip", re.compile(rf"(?<![\w.]){_OCTET}(?:\.{_OCTET}){{3}}(?![\w.])")),
+    Rule("ip", re.compile(rf"(?i){_NOT_AFTER_VERSION}(?<![\w.]){_OCTET}(?:\.{_OCTET}){{3}}(?![\w.])")),
     Rule("ip", re.compile(r"(?<![\w:])(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}(?![\w:])"), needle=":"),
     Rule("host", re.compile(r"\b(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,24}\b"),
          needle=".", accept=_is_hostname),
